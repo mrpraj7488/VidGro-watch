@@ -5,6 +5,7 @@ import { createVideoWithHold } from '../../lib/supabase';
 import GlobalHeader from '../../components/GlobalHeader';
 import VideoPreview from '../../components/VideoPreview';
 import { Link, ChevronDown, TrendingUp } from 'lucide-react-native';
+import { calculatePromotionCost, calculateCoinReward } from '../../utils/validation';
 
 export default function PromoteTab() {
   const { user, profile, refreshProfile } = useAuth();
@@ -16,6 +17,8 @@ export default function PromoteTab() {
   const [selectedViews, setSelectedViews] = useState<number | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showViewsDropdown, setShowViewsDropdown] = useState(false);
+  const [showDurationDropdown, setShowDurationDropdown] = useState(false);
 
   const viewsOptions = [
     { label: '10 Views', value: 10 },
@@ -40,38 +43,12 @@ export default function PromoteTab() {
 
   const calculateCost = () => {
     if (!selectedViews || !selectedDuration) return 0;
-    
-    // Base cost calculation
-    const baseCost = selectedViews * 2;
-    const durationMultiplier = selectedDuration / 60; // Per minute
-    const totalCost = Math.ceil(baseCost * durationMultiplier);
-    
-    // VIP discount
-    if (profile?.is_vip) {
-      return Math.ceil(totalCost * 0.9); // 10% discount
-    }
-    
-    return totalCost;
+    return calculatePromotionCost(selectedViews, selectedDuration, profile?.is_vip);
   };
 
   const calculateReward = () => {
     if (!selectedDuration) return 0;
-    
-    // Reward based on duration
-    if (selectedDuration >= 540) return 200;
-    if (selectedDuration >= 480) return 150;
-    if (selectedDuration >= 420) return 130;
-    if (selectedDuration >= 360) return 100;
-    if (selectedDuration >= 300) return 90;
-    if (selectedDuration >= 240) return 70;
-    if (selectedDuration >= 180) return 55;
-    if (selectedDuration >= 150) return 50;
-    if (selectedDuration >= 120) return 45;
-    if (selectedDuration >= 90) return 35;
-    if (selectedDuration >= 60) return 25;
-    if (selectedDuration >= 45) return 15;
-    if (selectedDuration >= 35) return 10;
-    return 5;
+    return calculateCoinReward(selectedDuration);
   };
 
   const handlePromoteVideo = async () => {
@@ -177,20 +154,60 @@ export default function PromoteTab() {
           </View>
 
           <Text style={styles.label}>Number of Views *</Text>
-          <TouchableOpacity style={styles.dropdown}>
+          <TouchableOpacity 
+            style={styles.dropdown}
+            onPress={() => setShowViewsDropdown(!showViewsDropdown)}
+          >
             <Text style={[styles.dropdownText, !selectedViews && styles.placeholder]}>
               {selectedViews ? `${selectedViews} Views` : 'Select views'}
             </Text>
             <ChevronDown size={20} color="#666" />
           </TouchableOpacity>
+          
+          {showViewsDropdown && (
+            <View style={styles.dropdownMenu}>
+              {viewsOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setSelectedViews(option.value);
+                    setShowViewsDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <Text style={styles.label}>Set Duration (seconds) *</Text>
-          <TouchableOpacity style={styles.dropdown}>
+          <TouchableOpacity 
+            style={styles.dropdown}
+            onPress={() => setShowDurationDropdown(!showDurationDropdown)}
+          >
             <Text style={[styles.dropdownText, !selectedDuration && styles.placeholder]}>
               {selectedDuration ? `${selectedDuration} seconds` : 'Select duration'}
             </Text>
             <ChevronDown size={20} color="#666" />
           </TouchableOpacity>
+          
+          {showDurationDropdown && (
+            <View style={styles.dropdownMenu}>
+              {durationOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setSelectedDuration(option.value);
+                    setShowDurationDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           {selectedViews && selectedDuration && (
             <View style={styles.costContainer}>
@@ -306,6 +323,27 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     color: '#999',
+  },
+  dropdownMenu: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    maxHeight: 200,
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: '#333',
   },
   costContainer: {
     backgroundColor: 'white',
