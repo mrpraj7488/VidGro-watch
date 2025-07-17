@@ -8,7 +8,6 @@ declare global {
       EXPO_PUBLIC_ADMOB_BANNER_ID: string;
       EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID: string;
       EXPO_PUBLIC_ADMOB_REWARDED_ID: string;
-      EXPO_PUBLIC_YOUTUBE_API_KEY: string;
     }
   }
 }

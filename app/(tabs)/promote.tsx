@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView 
 import { useAuth } from '../../contexts/AuthContext';
 import { createVideoWithHold } from '../../lib/supabase';
 import GlobalHeader from '../../components/GlobalHeader';
+import VideoPreview from '../../components/VideoPreview';
 import { Link, ChevronDown, TrendingUp } from 'lucide-react-native';
 
 export default function PromoteTab() {
@@ -10,6 +11,8 @@ export default function PromoteTab() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [title, setTitle] = useState('');
+  const [videoId, setVideoId] = useState('');
+  const [isVideoValid, setIsVideoValid] = useState(false);
   const [selectedViews, setSelectedViews] = useState<number | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -72,8 +75,8 @@ export default function PromoteTab() {
   };
 
   const handlePromoteVideo = async () => {
-    if (!youtubeUrl || !title || !selectedViews || !selectedDuration) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!youtubeUrl || !title || !selectedViews || !selectedDuration || !isVideoValid) {
+      Alert.alert('Error', 'Please fill in all fields and ensure video is valid');
       return;
     }
 
@@ -126,6 +129,16 @@ export default function PromoteTab() {
       Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVideoValidation = (isValid: boolean, extractedTitle?: string, extractedVideoId?: string) => {
+    setIsVideoValid(isValid);
+    if (isValid && extractedTitle && !title) {
+      setTitle(extractedTitle);
+    }
+    if (isValid && extractedVideoId) {
+      setVideoId(extractedVideoId);
     }
   };
 
@@ -196,11 +209,20 @@ export default function PromoteTab() {
               )}
             </View>
           )}
+            <VideoPreview 
+              youtubeUrl={youtubeUrl}
+              onValidation={handleVideoValidation}
+              collapsed={isVideoValid && youtubeUrl.length > 0}
+            />
+
 
           <TouchableOpacity
-            style={[styles.promoteButton, loading && styles.buttonDisabled]}
+            style={[
+              styles.promoteButton, 
+              (loading || !isVideoValid) && styles.buttonDisabled
+            ]}
             onPress={handlePromoteVideo}
-            disabled={loading}
+            disabled={loading || !isVideoValid}
           >
             <TrendingUp size={20} color="white" />
             <Text style={styles.promoteButtonText}>
@@ -211,7 +233,7 @@ export default function PromoteTab() {
           <View style={styles.infoContainer}>
             <Text style={styles.infoTitle}>How it works:</Text>
             <Text style={styles.infoText}>
-              1. Submit your YouTube video for promotion{'\n'}
+              1. Paste your YouTube video URL and verify it's embeddable{'\n'}
               2. Your video enters a 10-minute hold period{'\n'}
               3. After the hold period, your video becomes available for viewers{'\n'}
               4. Users earn coins by watching your video{'\n'}

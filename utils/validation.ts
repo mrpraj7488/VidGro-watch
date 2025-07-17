@@ -55,7 +55,7 @@ export function validateUsername(username: string): ValidationResult {
 }
 
 // YouTube URL validation
-export function validateYouTubeUrl(url: string): ValidationResult {
+export function validateYouTubeUrl(url: string, skipEmbedCheck: boolean = false): ValidationResult {
   if (!url) {
     return { isValid: false, error: 'YouTube URL is required' };
   }
@@ -63,6 +63,11 @@ export function validateYouTubeUrl(url: string): ValidationResult {
   const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (!youtubeRegex.test(url)) {
     return { isValid: false, error: 'Please enter a valid YouTube URL' };
+  }
+
+  // Skip embed check for basic URL validation
+  if (skipEmbedCheck) {
+    return { isValid: true };
   }
 
   return { isValid: true };

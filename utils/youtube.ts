@@ -1,15 +1,11 @@
-// YouTube API utilities for VidGro app
+// YouTube utilities for VidGro app - System-based validation without API
 
 interface YouTubeVideoInfo {
   id: string;
   title: string;
-  description: string;
-  duration: number; // in seconds
   thumbnail: string;
-  channelTitle: string;
-  publishedAt: string;
-  viewCount: number;
-  likeCount: number;
+  isEmbeddable: boolean;
+  embedUrl: string;
 }
 
 // Extract video ID from YouTube URL
@@ -28,18 +24,6 @@ export function extractVideoId(url: string): string | null {
   }
 
   return null;
-}
-
-// Convert ISO 8601 duration to seconds
-export function parseDuration(duration: string): number {
-  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!match) return 0;
-
-  const hours = parseInt(match[1] || '0', 10);
-  const minutes = parseInt(match[2] || '0', 10);
-  const seconds = parseInt(match[3] || '0', 10);
-
-  return hours * 3600 + minutes * 60 + seconds;
 }
 
 // Get video thumbnail URL
@@ -80,80 +64,147 @@ export function getEmbedUrl(videoId: string, options: {
   return `https://www.youtube.com/embed/${videoId}${queryString ? `?${queryString}` : ''}`;
 }
 
-// Fetch video information using YouTube Data API
-export async function fetchVideoInfo(videoId: string): Promise<YouTubeVideoInfo | null> {
-  const apiKey = process.env.EXPO_PUBLIC_YOUTUBE_API_KEY;
-  
-  if (!apiKey) {
-    console.warn('YouTube API key not configured');
-    return null;
-  }
-
+// Extract video title from YouTube page (system-based approach)
+export async function extractVideoTitle(videoId: string): Promise<string | null> {
   try {
-    const response = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${apiKey}&part=snippet,contentDetails,statistics`
-    );
+    // Try to fetch the YouTube page and extract title from meta tags
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
 
     if (!response.ok) {
-      throw new Error(`YouTube API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.items || data.items.length === 0) {
       return null;
     }
 
-    const video = data.items[0];
-    const snippet = video.snippet;
-    const contentDetails = video.contentDetails;
-    const statistics = video.statistics;
+    const html = await response.text();
+    
+    // Extract title from various possible meta tags
+    const titlePatterns = [
+      /<meta property="og:title" content="([^"]+)"/,
+      /<meta name="title" content="([^"]+)"/,
+      /<title>([^<]+)<\/title>/,
+      /"title":"([^"]+)"/
+    ];
 
-    return {
-      id: videoId,
-      title: snippet.title,
-      description: snippet.description,
-      duration: parseDuration(contentDetails.duration),
-      thumbnail: getThumbnailUrl(videoId, 'medium'),
-      channelTitle: snippet.channelTitle,
-      publishedAt: snippet.publishedAt,
-      viewCount: parseInt(statistics.viewCount || '0', 10),
-      likeCount: parseInt(statistics.likeCount || '0', 10),
-    };
+    for (const pattern of titlePatterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        // Clean up the title (remove " - YouTube" suffix if present)
+        let title = match[1].replace(/ - YouTube$/, '').trim();
+        // Decode HTML entities
+        title = title.replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'")
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>');
+        return title;
+      }
+    }
+
+    return null;
   } catch (error) {
-    console.error('Error fetching video info:', error);
+    console.error('Error extracting video title:', error);
     return null;
   }
 }
 
-// Validate if video is suitable for promotion
-export function validateVideoForPromotion(videoInfo: YouTubeVideoInfo): {
+// Check if video is embeddable by testing iframe load
+export function checkVideoEmbeddable(videoId: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe');
+    iframe.src = getEmbedUrl(videoId, { autoplay: false, controls: true });
+    iframe.style.display = 'none';
+    iframe.width = '1';
+    iframe.height = '1';
+    
+    let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        document.body.removeChild(iframe);
+        resolve(false);
+      }
+    }, 5000); // 5 second timeout
+
+    iframe.onload = () => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        document.body.removeChild(iframe);
+        resolve(true);
+      }
+    };
+
+    iframe.onerror = () => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        document.body.removeChild(iframe);
+        resolve(false);
+      }
+    };
+
+    document.body.appendChild(iframe);
+  });
+}
+
+// Validate video for promotion (system-based)
+export async function validateVideoForPromotion(url: string): Promise<{
   isValid: boolean;
-  errors: string[];
-} {
-  const errors: string[] = [];
-
-  // Check duration (10 seconds to 10 minutes)
-  if (videoInfo.duration < 10) {
-    errors.push('Video must be at least 10 seconds long');
-  }
-  if (videoInfo.duration > 600) {
-    errors.push('Video must be less than 10 minutes long');
-  }
-
-  // Check if video is too old (optional - could be configurable)
-  const publishedDate = new Date(videoInfo.publishedAt);
-  const oneYearAgo = new Date();
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  videoInfo?: YouTubeVideoInfo;
+  error?: string;
+}> {
+  const videoId = extractVideoId(url);
   
-  if (publishedDate < oneYearAgo) {
-    errors.push('Video is too old for promotion');
+  if (!videoId) {
+    return {
+      isValid: false,
+      error: 'Invalid YouTube URL format'
+    };
   }
 
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
+  try {
+    // Check if video is embeddable
+    const isEmbeddable = await checkVideoEmbeddable(videoId);
+    
+    if (!isEmbeddable) {
+      return {
+        isValid: false,
+        error: 'Video is not embeddable or may be restricted'
+      };
+    }
+
+    // Extract video title
+    const title = await extractVideoTitle(videoId);
+    
+    if (!title) {
+      return {
+        isValid: false,
+        error: 'Could not extract video title. Video may be private or restricted.'
+      };
+    }
+
+    const videoInfo: YouTubeVideoInfo = {
+      id: videoId,
+      title,
+      thumbnail: getThumbnailUrl(videoId),
+      isEmbeddable: true,
+      embedUrl: getEmbedUrl(videoId, { autoplay: true, controls: true })
+    };
+
+    return {
+      isValid: true,
+      videoInfo
+    };
+  } catch (error) {
+    return {
+      isValid: false,
+      error: 'Failed to validate video. Please check the URL and try again.'
+    };
+  }
 }
 
 // Format view count for display
@@ -195,23 +246,15 @@ export function createSearchUrl(query: string): string {
   return `https://www.youtube.com/results?search_query=${encodedQuery}`;
 }
 
-// Extract video info from URL (without API)
-export async function getBasicVideoInfo(url: string): Promise<{
-  videoId: string;
-  thumbnailUrl: string;
-  embedUrl: string;
-} | null> {
-  const videoId = extractVideoId(url);
+// Get basic video info without API
+export async function getBasicVideoInfo(url: string): Promise<YouTubeVideoInfo | null> {
+  const validation = await validateVideoForPromotion(url);
   
-  if (!videoId) {
-    return null;
+  if (validation.isValid && validation.videoInfo) {
+    return validation.videoInfo;
   }
-
-  return {
-    videoId,
-    thumbnailUrl: getThumbnailUrl(videoId),
-    embedUrl: getEmbedUrl(videoId, { autoplay: true, controls: true }),
-  };
+  
+  return null;
 }
 
 // YouTube player state constants
@@ -277,10 +320,10 @@ export function createPlayerHTML(videoId: string, options: {
 
 export default {
   extractVideoId,
-  parseDuration,
   getThumbnailUrl,
   getEmbedUrl,
-  fetchVideoInfo,
+  extractVideoTitle,
+  checkVideoEmbeddable,
   validateVideoForPromotion,
   formatViewCount,
   formatDuration,
