@@ -18,7 +18,6 @@ export default function RootLayout() {
         <Stack.Screen name="configure-ads" />
         <Stack.Screen name="contact-support" />
         <Stack.Screen name="delete-account" />
-        <Stack.Screen name="edit-video" />
         <Stack.Screen name="languages" />
         <Stack.Screen name="privacy-policy" />
         <Stack.Screen name="rate-us" />
