@@ -16,13 +16,6 @@ export default function RootLayout() {
         <Stack.Screen name="become-vip" />
         <Stack.Screen name="buy-coins" />
         <Stack.Screen name="configure-ads" />
-        <Stack.Screen name="contact-support" />
-        <Stack.Screen name="delete-account" />
-        <Stack.Screen name="languages" />
-        <Stack.Screen name="privacy-policy" />
-        <Stack.Screen name="rate-us" />
-        <Stack.Screen name="refer-friend" />
-        <Stack.Screen name="terms" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="light" />
