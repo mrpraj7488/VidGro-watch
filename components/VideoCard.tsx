@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { Play, Clock, Coins, Eye, Edit3 } from 'lucide-react-native';
+import { Play, Clock, Coins, Eye, CreditCard as Edit3 } from 'lucide-react-native';
 
 interface VideoCardProps {
   video: {
