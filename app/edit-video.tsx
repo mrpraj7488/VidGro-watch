@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, CreditCard as Edit3, Save, Trash2, Play, Pause } from 'lucide-react-native';
+import { ArrowLeft, Edit3, Save, Trash2, Play, Pause } from 'lucide-react-native';
 
 interface VideoData {
   id: string;

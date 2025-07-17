@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { validateVideoForPromotion, getThumbnailUrl, extractVideoId } from '../utils/youtube';
-import { CircleAlert as AlertCircle, CircleCheck as CheckCircle, Play } from 'lucide-react-native';
+import { AlertCircle, CheckCircle, Play } from 'lucide-react-native';
 
 interface VideoPreviewProps {
   youtubeUrl: string;

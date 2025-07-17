@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, FileText, Scale, Shield, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, FileText, Scale, Shield, AlertTriangle } from 'lucide-react-native';
 
 export default function TermsScreen() {
   const router = useRouter();

@@ -95,11 +95,11 @@ export async function extractVideoTitle(videoId: string): Promise<string | null>
         // Clean up the title (remove " - YouTube" suffix if present)
         let title = match[1].replace(/ - YouTube$/, '').trim();
         // Decode HTML entities
-        title = title.replace(/&quot;/g, '"')
+        title = title.replace(/"/g, '"')
                     .replace(/&#39;/g, "'")
-                    .replace(/&amp;/g, '&')
-                    .replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>');
+                    .replace(/&/g, '&')
+                    .replace(/</g, '<')
+                    .replace(/>/g, '>');
         return title;
       }
     }
@@ -114,6 +114,12 @@ export async function extractVideoTitle(videoId: string): Promise<string | null>
 // Check if video is embeddable by testing iframe load
 export function checkVideoEmbeddable(videoId: string): Promise<boolean> {
   return new Promise((resolve) => {
+    if (typeof document === 'undefined') {
+      // Not in browser environment, assume embeddable
+      resolve(true);
+      return;
+    }
+
     const iframe = document.createElement('iframe');
     iframe.src = getEmbedUrl(videoId, { autoplay: false, controls: true });
     iframe.style.display = 'none';

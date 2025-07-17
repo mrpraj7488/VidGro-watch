@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { Play, Clock, Coins, Eye, TrendingUp } from 'lucide-react-native';
+import { Play, Clock, Coins, Eye, Edit3 } from 'lucide-react-native';
 
 interface VideoCardProps {
   video: {
@@ -115,7 +115,7 @@ export default function VideoCard({ video, onPress, onEdit, showEditButton = fal
 
         {showEditButton && onEdit && (
           <TouchableOpacity style={styles.editButton} onPress={onEdit}>
-            <TrendingUp size={16} color="#800080" />
+            <Edit3 size={16} color="#800080" />
             <Text style={styles.editButtonText}>Edit</Text>
           </TouchableOpacity>
         )}

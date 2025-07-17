@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert 
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MessageCircle, Send, Phone, Mail, CircleHelp as HelpCircle } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle, Send, Phone, Mail, HelpCircle } from 'lucide-react-native';
 
 export default function ContactSupportScreen() {
   const { profile } = useAuth();

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput 
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Trash2, TriangleAlert as AlertTriangle, Shield } from 'lucide-react-native';
+import { ArrowLeft, Trash2, AlertTriangle, Shield } from 'lucide-react-native';
 
 export default function DeleteAccountScreen() {
   const { user, profile, signOut } = useAuth();
