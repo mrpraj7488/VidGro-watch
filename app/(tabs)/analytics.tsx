@@ -1,19 +1,82 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+  Platform,
+  Alert,
+  RefreshControl,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { useVideoStore } from '../../store/videoStore';
 import { supabase } from '../../lib/supabase';
+import { 
+  Video, 
+  ChevronDown, 
+  ChevronUp, 
+  CreditCard as Edit3, 
+  RotateCcw, 
+  Eye, 
+  Clock, 
+  Timer, 
+  Activity, 
+  DollarSign, 
+  Play,
+  Coins,
+  RefreshCw
+} from 'lucide-react-native';
 import GlobalHeader from '../../components/GlobalHeader';
-import { Video, Coins, RefreshCw } from 'lucide-react-native';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming,
+  withSpring,
+  Easing,
+  withSequence
+} from 'react-native-reanimated';
+import { useFocusEffect } from '@react-navigation/native';
+
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 480;
 
 interface AnalyticsData {
-  total_videos_promoted: number;
-  total_coins_earned: number;
-  total_coins_spent: number;
-  total_views_received: number;
+  totalVideosPromoted: number;
+  totalCoinsEarned: number;
+  totalCoinsSpent: number;
+  totalViewsReceived: number;
+  totalWatchTime: number;
+  activeVideos: number;
+  completedVideos: number;
+  onHoldVideos: number;
+  recentActivities: Transaction[];
+  promotedVideos: PromotedVideo[];
+}
+
+interface PromotedVideo {
+  id: string;
+  youtube_url: string;
+  title: string;
+  views_count: number;
+  target_views: number;
+  coin_reward: number;
+  coin_cost: number;
+  status: 'active' | 'paused' | 'completed' | 'on_hold' | 'repromoted';
+  created_at: string;
+  updated_at: string;
+  hold_until?: string;
   total_watch_time: number;
-  active_videos: number;
-  completed_videos: number;
-  on_hold_videos: number;
+  engagement_rate: number;
+  completion_rate: number;
+  average_watch_time: number;
+  repromoted_at?: string;
+  video_views?: any[];
+  display_views_count?: number;
+  progress_text?: string;
+  fresh_data?: boolean;
 }
 
 interface Transaction {
@@ -22,38 +85,119 @@ interface Transaction {
   transaction_type: string;
   description: string;
   created_at: string;
+  reference_id?: string;
 }
 
 export default function AnalyticsTab() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+  const { clearQueue } = useVideoStore();
+  const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [recentActivity, setRecentActivity] = useState<Transaction[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsData>({
+    totalVideosPromoted: 0,
+    totalCoinsEarned: 0,
+    totalCoinsSpent: 0,
+    totalViewsReceived: 0,
+    totalWatchTime: 0,
+    activeVideos: 0,
+    completedVideos: 0,
+    onHoldVideos: 0,
+    recentActivities: [],
+    promotedVideos: [],
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showMoreVideos, setShowMoreVideos] = useState(false);
+  const [showMoreActivities, setShowMoreActivities] = useState(false);
+  const [holdTimers, setHoldTimers] = useState<{[key: string]: number}>({});
 
-  const fetchAnalytics = async () => {
+  // Animation values
+  const videosHeight = useSharedValue(0);
+  const activitiesHeight = useSharedValue(0);
+  const coinBounce = useSharedValue(1);
+  const refreshRotation = useSharedValue(0);
+
+  // Auto-refresh and real-time updates
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchAnalytics();
+        
+        // Set up more frequent refresh for real-time updates
+        const interval = setInterval(() => {
+          checkVideoHoldStatus();
+          updateHoldTimers();
+          // Also refresh analytics data more frequently
+          fetchAnalytics();
+        }, 2000); // Check every 2 seconds for more responsive updates
+        
+        return () => clearInterval(interval);
+      }
+    }, [user])
+  );
+
+  const fetchAnalytics = async (isRefresh = false) => {
     if (!user) return;
 
     try {
+      if (isRefresh) {
+        setRefreshing(true);
+        refreshRotation.value = withTiming(360, { duration: 1000 });
+      } else {
+        setLoading(true);
+      }
+
       // Fetch user analytics summary
       const { data: analyticsData, error: analyticsError } = await supabase
         .rpc('get_user_analytics_summary', { user_uuid: user.id });
 
       if (analyticsError) {
         console.error('Error fetching analytics:', analyticsError);
-      } else {
-        setAnalytics(analyticsData[0] || {
-          total_videos_promoted: 0,
-          total_coins_earned: 0,
-          total_coins_spent: 0,
-          total_views_received: 0,
-          total_watch_time: 0,
-          active_videos: 0,
-          completed_videos: 0,
-          on_hold_videos: 0,
-        });
       }
+
+      const summaryData = analyticsData?.[0] || {
+        total_videos_promoted: 0,
+        total_coins_earned: 0,
+        total_coins_spent: 0,
+        total_views_received: 0,
+        total_watch_time: 0,
+        active_videos: 0,
+        completed_videos: 0,
+        on_hold_videos: 0,
+      };
+
+      // Fetch promoted videos with detailed information
+      const { data: promotedVideos, error: videosError } = await supabase
+        .from('videos')
+        .select(`
+          *,
+          video_views(
+            id,
+            watched_duration,
+            completed,
+            coins_earned,
+            created_at
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (videosError) throw videosError;
+
+      // Process videos with enhanced analytics
+      const videosWithAnalytics = (promotedVideos || []).map((video) => {
+        const progressPercentage = (video.views_count / video.target_views) * 100;
+        return {
+          ...video,
+          display_views_count: video.views_count,
+          progress_text: `${video.views_count}/${video.target_views}`,
+          completion_rate: progressPercentage,
+          fresh_data: true
+        };
+      });
+
+      // Enhanced profile refresh for guaranteed coin balance updates
+      await refreshProfile();
 
       // Fetch recent activity
       const { data: activityData, error: activityError } = await supabase
@@ -61,28 +205,121 @@ export default function AnalyticsTab() {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(20);
 
       if (activityError) {
         console.error('Error fetching activity:', activityError);
-      } else {
-        setRecentActivity(activityData || []);
       }
+
+      setAnalytics({
+        totalVideosPromoted: summaryData.total_videos_promoted,
+        totalCoinsEarned: summaryData.total_coins_earned,
+        totalCoinsSpent: summaryData.total_coins_spent,
+        totalViewsReceived: summaryData.total_views_received,
+        totalWatchTime: summaryData.total_watch_time,
+        activeVideos: summaryData.active_videos,
+        completedVideos: summaryData.completed_videos,
+        onHoldVideos: summaryData.on_hold_videos,
+        recentActivities: activityData || [],
+        promotedVideos: videosWithAnalytics,
+      });
+
+      // Update hold timers for videos on hold
+      const holdVideos = videosWithAnalytics.filter(v => v.status === 'on_hold');
+      const newHoldTimers: {[key: string]: number} = {};
+      holdVideos.forEach(video => {
+        let holdUntilTime: Date;
+        
+        if (video.hold_until) {
+          holdUntilTime = new Date(video.hold_until);
+        } else {
+          holdUntilTime = new Date(video.created_at);
+          holdUntilTime.setMinutes(holdUntilTime.getMinutes() + 10);
+        }
+        
+        const remainingMs = holdUntilTime.getTime() - new Date().getTime();
+        newHoldTimers[video.id] = Math.max(0, Math.floor(remainingMs / 1000));
+      });
+      setHoldTimers(newHoldTimers);
+
+      // Animate coin bounce on refresh
+      if (isRefresh) {
+        coinBounce.value = withSequence(
+          withSpring(1.2, { damping: 8 }),
+          withSpring(1, { damping: 8 })
+        );
+      }
+
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error fetching analytics:', error);
+      Alert.alert('Error', 'Failed to load analytics data');
     } finally {
       setLoading(false);
       setRefreshing(false);
+      refreshRotation.value = 0;
     }
   };
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [user]);
+  const checkVideoHoldStatus = async () => {
+    if (!user) return;
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchAnalytics();
+    try {
+      const { data, error } = await supabase.rpc('release_videos_from_hold');
+      
+      if (error) throw error;
+      
+      if (data > 0) {
+        console.log(`📊 Released ${data} videos from hold to queue`);
+        fetchAnalytics();
+        clearQueue();
+      }
+    } catch (error) {
+      console.error('Error checking video hold status:', error);
+    }
+  };
+
+  const updateHoldTimers = () => {
+    setHoldTimers(prev => {
+      const updated = { ...prev };
+      let hasChanges = false;
+      
+      Object.keys(updated).forEach(videoId => {
+        if (updated[videoId] > 0) {
+          updated[videoId] = Math.max(0, updated[videoId] - 2);
+          hasChanges = true;
+        } else if (updated[videoId] === 0) {
+          delete updated[videoId];
+          hasChanges = true;
+        }
+      });
+      
+      return hasChanges ? updated : prev;
+    });
+  };
+
+  const handleEditVideo = (video: PromotedVideo) => {
+    router.push({
+      pathname: '/edit-video',
+      params: {
+        videoId: video.id,
+      }
+    });
+  };
+
+  const toggleVideosExpansion = () => {
+    setShowMoreVideos(!showMoreVideos);
+    videosHeight.value = withTiming(showMoreVideos ? 0 : 1, {
+      duration: 300,
+      easing: Easing.out(Easing.quad),
+    });
+  };
+
+  const toggleActivitiesExpansion = () => {
+    setShowMoreActivities(!showMoreActivities);
+    activitiesHeight.value = withTiming(showMoreActivities ? 0 : 1, {
+      duration: 300,
+      easing: Easing.out(Easing.quad),
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -92,6 +329,45 @@ export default function AnalyticsTab() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const formatHoldTimer = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return '#2ECC71';
+      case 'completed': return '#3498DB';
+      case 'paused': return '#E74C3C';
+      case 'on_hold': return '#F39C12';
+      case 'repromoted': return '#9B59B6';
+      default: return '#95A5A6';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'active': return 'ACTIVE';
+      case 'completed': return 'COMPLETED';
+      case 'paused': return 'PAUSED';
+      case 'on_hold': return 'PENDING';
+      case 'repromoted': return 'REPROMOTED';
+      default: return status.toUpperCase();
+    }
+  };
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'video_watch': return <Eye color="#4ECDC4" size={16} />;
+      case 'video_promotion': return <Video color="#FF4757" size={16} />;
+      case 'purchase': return <DollarSign color="#FFA726" size={16} />;
+      case 'admin_adjustment': return <Activity color="#9B59B6" size={16} />;
+      case 'referral_bonus': return <Play color="#2ECC71" size={16} />;
+      default: return <Activity color="#666" size={16} />;
+    }
   };
 
   const getTransactionIcon = (type: string) => {
@@ -122,6 +398,27 @@ export default function AnalyticsTab() {
     }
   };
 
+  const videosAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: videosHeight.value,
+    transform: [{ scaleY: videosHeight.value }],
+  }));
+
+  const activitiesAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: activitiesHeight.value,
+    transform: [{ scaleY: activitiesHeight.value }],
+  }));
+
+  const coinAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: coinBounce.value }],
+  }));
+
+  const refreshAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${refreshRotation.value}deg` }],
+  }));
+
+  const displayedVideos = showMoreVideos ? analytics.promotedVideos : analytics.promotedVideos.slice(0, 4);
+  const displayedActivities = showMoreActivities ? analytics.recentActivities : analytics.recentActivities.slice(0, 3);
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -141,56 +438,66 @@ export default function AnalyticsTab() {
     <View style={styles.container}>
       <GlobalHeader 
         title="Analytics" 
+        showCoinDisplay={true} 
         menuVisible={menuVisible} 
         setMenuVisible={setMenuVisible} 
       />
-      
+
       <ScrollView 
-        style={styles.content}
+        style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchAnalytics(true)}
+            tintColor="#800080"
+            colors={['#800080']}
+          />
         }
       >
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Video size={24} color="#800080" />
+        {/* Primary Metrics */}
+        <View style={styles.metricsSection}>
+          <View style={styles.metricCard}>
+            <View style={[styles.metricIcon, { backgroundColor: '#800080' }]}>
+              <Video color="white" size={24} />
             </View>
-            <Text style={styles.statNumber}>{analytics?.total_videos_promoted || 0}</Text>
-            <Text style={styles.statLabel}>Videos Promoted</Text>
+            <Text style={styles.metricValue}>{analytics.totalVideosPromoted}</Text>
+            <Text style={styles.metricLabel}>Videos Promoted</Text>
           </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIconGreen}>
-              <Coins size={24} color="#2ECC71" />
-            </View>
-            <Text style={styles.statNumber}>{analytics?.total_coins_earned || 0}</Text>
-            <Text style={styles.statLabel}>Coins Earned</Text>
+          
+          <View style={styles.metricCard}>
+            <Animated.View style={[styles.metricIcon, { backgroundColor: '#2ECC71' }, coinAnimatedStyle]}>
+              <Coins size={24} color="white" />
+            </Animated.View>
+            <Text style={styles.metricValue}>{analytics.totalCoinsEarned}</Text>
+            <Text style={styles.metricLabel}>Coins Earned</Text>
           </View>
         </View>
 
+        {/* Video Status Overview */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Promoted Videos</Text>
-            <TouchableOpacity onPress={onRefresh}>
-              <RefreshCw size={20} color="#800080" />
+            <TouchableOpacity onPress={() => fetchAnalytics(true)}>
+              <Animated.View style={refreshAnimatedStyle}>
+                <RefreshCw size={20} color="#800080" />
+              </Animated.View>
             </TouchableOpacity>
           </View>
 
           <View style={styles.promotedVideosContainer}>
-            {analytics && (analytics.total_videos_promoted > 0) ? (
+            {analytics.totalVideosPromoted > 0 ? (
               <View style={styles.videoStats}>
                 <View style={styles.videoStatItem}>
-                  <Text style={styles.videoStatNumber}>{analytics.active_videos}</Text>
+                  <Text style={styles.videoStatNumber}>{analytics.activeVideos}</Text>
                   <Text style={styles.videoStatLabel}>Active</Text>
                 </View>
                 <View style={styles.videoStatItem}>
-                  <Text style={styles.videoStatNumber}>{analytics.on_hold_videos}</Text>
+                  <Text style={styles.videoStatNumber}>{analytics.onHoldVideos}</Text>
                   <Text style={styles.videoStatLabel}>On Hold</Text>
                 </View>
                 <View style={styles.videoStatItem}>
-                  <Text style={styles.videoStatNumber}>{analytics.completed_videos}</Text>
+                  <Text style={styles.videoStatNumber}>{analytics.completedVideos}</Text>
                   <Text style={styles.videoStatLabel}>Completed</Text>
                 </View>
               </View>
@@ -206,33 +513,123 @@ export default function AnalyticsTab() {
           </View>
         </View>
 
+        {/* Detailed Videos List */}
+        {analytics.promotedVideos.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Video Details</Text>
+            <View style={styles.videosList}>
+              {displayedVideos.map((video) => (
+                <View key={video.id} style={styles.videoItem}>
+                  <View style={styles.videoInfo}>
+                    <Text style={styles.videoTitle} numberOfLines={2}>
+                      {video.title}
+                    </Text>
+                    <Text style={[styles.videoStats, video.views_count >= video.target_views && styles.completedStats]}>
+                      <Text>{video.display_views_count || video.views_count}/{video.target_views} views</Text>
+                      {video.completion_rate >= 100 && ' ✓'}
+                    </Text>
+                    <View style={styles.videoMeta}>
+                      <Text style={styles.videoDate}>
+                        {formatDate(video.created_at)}
+                      </Text>
+                      <View style={styles.videoStatusContainer}>
+                        {video.status === 'on_hold' && holdTimers[video.id] && (
+                          <View style={styles.holdTimer}>
+                            <Timer color="#F39C12" size={12} />
+                            <Text style={styles.holdTimerText}>
+                              {formatHoldTimer(holdTimers[video.id])}
+                            </Text>
+                          </View>
+                        )}
+                        {video.status === 'repromoted' && (
+                          <View style={styles.repromoteIndicator}>
+                            <Play color="#9B59B6" size={12} />
+                            <Text style={styles.repromoteText}>REPROMOTED</Text>
+                          </View>
+                        )}
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(video.status) }]}>
+                          <Text style={styles.statusText}>
+                            {getStatusText(video.status)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={() => handleEditVideo(video)}
+                  >
+                    <Edit3 color="#800080" size={20} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              
+              {analytics.promotedVideos.length > 4 && (
+                <TouchableOpacity 
+                  style={styles.viewMoreButton}
+                  onPress={toggleVideosExpansion}
+                >
+                  <Text style={styles.viewMoreText}>
+                    {showMoreVideos ? 'View Less' : `View More (${analytics.promotedVideos.length - 4})`}
+                  </Text>
+                  {showMoreVideos ? (
+                    <ChevronUp color="#800080" size={20} />
+                  ) : (
+                    <ChevronDown color="#800080" size={20} />
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Recent Activity Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           
-          {recentActivity.length > 0 ? (
-            <View style={styles.activityContainer}>
-              {recentActivity.map((transaction) => (
-                <View key={transaction.id} style={styles.activityItem}>
-                  <View style={styles.activityLeft}>
-                    <Text style={styles.activityDescription}>
-                      {transaction.description}
+          {analytics.recentActivities.length > 0 ? (
+            <View style={styles.activitiesList}>
+              {displayedActivities.map((activity) => (
+                <View key={activity.id} style={styles.activityItem}>
+                  <View style={styles.activityIcon}>
+                    {getActivityIcon(activity.transaction_type)}
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityDescription} numberOfLines={2}>
+                      {activity.description}
                     </Text>
                     <Text style={styles.activityDate}>
-                      {formatDate(transaction.created_at)}
+                      {formatDate(activity.created_at)}
                     </Text>
                   </View>
                   <View style={styles.activityRight}>
                     <Text style={[
                       styles.activityAmount,
-                      { color: getTransactionColor(transaction.transaction_type) }
+                      { color: getTransactionColor(activity.transaction_type) }
                     ]}>
-                      {getTransactionIcon(transaction.transaction_type)}
+                      {getTransactionIcon(activity.transaction_type)}
                       <Text style={styles.coinEmoji}>🪙</Text>
-                      {Math.abs(transaction.amount)}
+                      {Math.abs(activity.amount)}
                     </Text>
                   </View>
                 </View>
               ))}
+              
+              {analytics.recentActivities.length > 3 && (
+                <TouchableOpacity 
+                  style={styles.viewMoreButton}
+                  onPress={toggleActivitiesExpansion}
+                >
+                  <Text style={styles.viewMoreText}>
+                    {showMoreActivities ? 'View Less' : `View More (${analytics.recentActivities.length - 3})`}
+                  </Text>
+                  {showMoreActivities ? (
+                    <ChevronUp color="#800080" size={20} />
+                  ) : (
+                    <ChevronDown color="#800080" size={20} />
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <View style={styles.emptyActivity}>
@@ -250,9 +647,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  content: {
+  scrollView: {
     flex: 1,
-    padding: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -263,16 +659,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
   },
-  statsContainer: {
+  metricsSection: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 24,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    gap: 12,
   },
-  statCard: {
+  metricCard: {
     flex: 1,
     backgroundColor: 'white',
     borderRadius: 16,
-    padding: 20,
+    padding: isSmallScreen ? 16 : 20,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -280,46 +677,37 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F3E5F5',
+  metricIcon: {
+    width: isSmallScreen ? 40 : 48,
+    height: isSmallScreen ? 40 : 48,
+    borderRadius: isSmallScreen ? 20 : 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  statIconGreen: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E8F5E8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statNumber: {
-    fontSize: 24,
+  metricValue: {
+    fontSize: isSmallScreen ? 20 : 24,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 14,
+  metricLabel: {
+    fontSize: isSmallScreen ? 11 : 12,
     color: '#666',
     textAlign: 'center',
+    fontWeight: '500',
   },
   section: {
-    marginBottom: 24,
+    margin: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: isSmallScreen ? 16 : 18,
     fontWeight: '600',
     color: '#333',
   },
@@ -350,24 +738,112 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
-  emptyState: {
+  videosList: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  videoItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 40,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  emptyStateTitle: {
-    fontSize: 16,
+  videoInfo: {
+    flex: 1,
+  },
+  videoTitle: {
+    fontSize: isSmallScreen ? 14 : 16,
     fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  videoStats: {
+    fontSize: 12,
     color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  emptyStateText: {
-    fontSize: 14,
+  completedStats: {
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  videoMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  videoDate: {
+    fontSize: 11,
     color: '#999',
-    textAlign: 'center',
-    lineHeight: 20,
   },
-  activityContainer: {
+  videoStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  holdTimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3CD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 4,
+  },
+  holdTimerText: {
+    fontSize: 10,
+    color: '#F39C12',
+    fontWeight: '600',
+  },
+  repromoteIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E5F5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 4,
+  },
+  repromoteText: {
+    fontSize: 9,
+    color: '#9B59B6',
+    fontWeight: '600',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'white',
+  },
+  editButton: {
+    padding: 8,
+    marginLeft: 12,
+  },
+  viewMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  viewMoreText: {
+    fontSize: 14,
+    color: '#800080',
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  activitiesList: {
     backgroundColor: 'white',
     borderRadius: 16,
     padding: 20,
@@ -385,13 +861,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
-  activityLeft: {
+  activityIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFF0F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
     flex: 1,
   },
   activityDescription: {
     fontSize: 14,
-    color: '#333',
     fontWeight: '500',
+    color: '#333',
+    marginBottom: 2,
   },
   activityDate: {
     fontSize: 12,
@@ -410,6 +896,29 @@ const styles = StyleSheet.create({
   coinEmoji: {
     fontSize: 14,
     marginHorizontal: 2,
+  },
+  positiveAmount: {
+    color: '#2ECC71',
+  },
+  negativeAmount: {
+    color: '#E74C3C',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   emptyActivity: {
     backgroundColor: 'white',
