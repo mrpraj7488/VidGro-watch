@@ -17,7 +17,7 @@ export default function GlobalHeader({
   menuVisible, 
   setMenuVisible 
 }: GlobalHeaderProps) {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const router = useRouter();
 
   console.log('GlobalHeader profile:', profile); // Debug log
@@ -43,7 +43,7 @@ export default function GlobalHeader({
   };
 
   const handleLogout = async () => {
-    const { signOut } = useAuth();
+    setMenuVisible(false);
     await signOut();
     router.replace('/(auth)/login');
   };

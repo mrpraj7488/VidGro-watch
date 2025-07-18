@@ -46,8 +46,14 @@ export default function MoreTab() {
   ];
 
   const handleLogout = async () => {
-    await signOut();
-    router.replace('/(auth)/login');
+    try {
+      await signOut();
+      router.replace('/(auth)/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force navigation even if signOut fails
+      router.replace('/(auth)/login');
+    }
   };
 
   const handleItemPress = (item: any) => {
