@@ -18,7 +18,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVideoStore } from '@/store/videoStore';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Eye, Clock, Trash2, Play, Timer, ChevronDown, Check, MoreVertical } from 'lucide-react-native';
+import { ArrowLeft, Eye, Clock, Trash2, Play, Timer, ChevronDown, Check, MoveVertical as MoreVertical } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
