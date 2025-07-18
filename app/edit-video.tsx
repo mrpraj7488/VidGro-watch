@@ -541,13 +541,13 @@ export default function EditVideoScreen() {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient colors={['#800080', '#FF4757']} style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleNavigateBack}>
-          <ArrowLeft color="white" size={24} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Video</Text>
-        <TouchableOpacity style={styles.menuButton}>
-          <MoreVertical color="white" size={24} />
-        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={handleNavigateBack}>
+            <ArrowLeft size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Video</Text>
+          <Edit3 size={24} color="white" />
+        </View>
       </LinearGradient>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -770,22 +770,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   header: {
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-  },
-  backButton: {
-    padding: 8,
-  },
-  menuButton: {
-    padding: 8,
   },
   headerTitle: {
-    fontSize: isSmallScreen ? 16 : 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: 'bold',
     color: 'white',
   },
   scrollView: {
