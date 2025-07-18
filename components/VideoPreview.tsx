@@ -33,7 +33,8 @@ export default function VideoPreview({ youtubeUrl, onValidation, collapsed = fal
   };
 
   const validateVideo = async () => {
-    if (!youtubeUrl.trim()) {
+    const trimmedUrl = youtubeUrl.trim();
+    if (!trimmedUrl) {
       resetState();
       return;
     }
@@ -42,12 +43,14 @@ export default function VideoPreview({ youtubeUrl, onValidation, collapsed = fal
     setError(null);
 
     try {
-      const result = await validateVideoForPromotion(youtubeUrl);
+      const result = await validateVideoForPromotion(trimmedUrl);
       
       if (result.isValid && result.videoInfo) {
         setVideoInfo(result.videoInfo);
         setShowPreview(true);
-        onValidation(true, result.videoInfo.title, result.videoInfo.id);
+        // Extract actual title from YouTube URL or use generated title
+        const actualTitle = result.videoInfo.title || generateTitleFromUrl(trimmedUrl);
+        onValidation(true, actualTitle, result.videoInfo.id);
       } else {
         setError(result.error || 'Video validation failed');
         onValidation(false);
@@ -58,6 +61,14 @@ export default function VideoPreview({ youtubeUrl, onValidation, collapsed = fal
     } finally {
       setLoading(false);
     }
+  };
+
+  const generateTitleFromUrl = (url: string): string => {
+    const videoId = extractVideoId(url);
+    if (videoId) {
+      return `Video ${videoId.substring(0, 8)}`;
+    }
+    return 'Untitled Video';
   };
 
   if (!youtubeUrl) {

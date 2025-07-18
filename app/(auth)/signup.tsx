@@ -33,13 +33,22 @@ export default function SignupScreen() {
     }
 
     setLoading(true);
-    const { error } = await signUp(email, password, username);
+    try {
+      const { error } = await signUp(email, password, username);
 
-    if (error) {
-      setLoading(false);
-      Alert.alert('Signup Error', error.message);
-    } else {
-      // Navigation will be handled by AuthContext
+      if (error) {
+        Alert.alert('Signup Error', error.message);
+      } else {
+        Alert.alert(
+          'Account Created!',
+          'Your account has been created successfully. You can now start watching videos and earning coins!',
+          [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+        );
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      Alert.alert('Error', 'Something went wrong during signup');
+    } finally {
       setLoading(false);
     }
   };

@@ -13,12 +13,14 @@ interface GlobalHeaderProps {
 
 export default function GlobalHeader({ 
   title, 
-  showCoinDisplay = true, 
+  showCoinDisplay = true,
   menuVisible, 
   setMenuVisible 
 }: GlobalHeaderProps) {
   const { profile } = useAuth();
   const router = useRouter();
+
+  console.log('GlobalHeader profile:', profile); // Debug log
 
   const sideMenuItems = [
     { icon: Share2, title: 'Refer a Friend', route: '/refer-friend' },

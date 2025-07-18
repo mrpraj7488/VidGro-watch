@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { createVideoWithHold } from '../../lib/supabase';
+import { createVideoWithHold, supabase } from '../../lib/supabase';
 import GlobalHeader from '../../components/GlobalHeader';
 import VideoPreview from '../../components/VideoPreview';
 import { Link, ChevronDown, TrendingUp } from 'lucide-react-native';
@@ -21,24 +21,24 @@ export default function PromoteTab() {
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
 
   const viewsOptions = [
-    { label: '10 Views', value: 10 },
-    { label: '25 Views', value: 25 },
-    { label: '50 Views', value: 50 },
-    { label: '100 Views', value: 100 },
-    { label: '250 Views', value: 250 },
-    { label: '500 Views', value: 500 },
-    { label: '1000 Views', value: 1000 },
+    { label: '10 Views', value: 10, cost: 20 },
+    { label: '25 Views', value: 25, cost: 50 },
+    { label: '50 Views', value: 50, cost: 100 },
+    { label: '100 Views', value: 100, cost: 200 },
+    { label: '250 Views', value: 250, cost: 500 },
+    { label: '500 Views', value: 500, cost: 1000 },
+    { label: '1000 Views', value: 1000, cost: 2000 },
   ];
 
   const durationOptions = [
-    { label: '30 seconds', value: 30 },
-    { label: '45 seconds', value: 45 },
-    { label: '60 seconds', value: 60 },
-    { label: '90 seconds', value: 90 },
-    { label: '120 seconds', value: 120 },
-    { label: '180 seconds', value: 180 },
-    { label: '300 seconds', value: 300 },
-    { label: '600 seconds', value: 600 },
+    { label: '30 seconds (5 coins)', value: 30, reward: 5 },
+    { label: '45 seconds (15 coins)', value: 45, reward: 15 },
+    { label: '60 seconds (25 coins)', value: 60, reward: 25 },
+    { label: '90 seconds (35 coins)', value: 90, reward: 35 },
+    { label: '120 seconds (45 coins)', value: 120, reward: 45 },
+    { label: '180 seconds (55 coins)', value: 180, reward: 55 },
+    { label: '300 seconds (90 coins)', value: 300, reward: 90 },
+    { label: '600 seconds (200 coins)', value: 600, reward: 200 },
   ];
 
   const calculateCost = () => {
@@ -52,20 +52,32 @@ export default function PromoteTab() {
   };
 
   const handlePromoteVideo = async () => {
-    if (!youtubeUrl || !title || !selectedViews || !selectedDuration || !isVideoValid) {
+    console.log('Promote video attempt:', { user, profile, youtubeUrl, title, selectedViews, selectedDuration, isVideoValid });
+    
+    if (!user) {
+      Alert.alert('Authentication Required', 'Please log in to promote videos');
+      return;
+    }
+
+    if (!profile) {
+      Alert.alert('Profile Loading', 'Please wait for your profile to load');
+      return;
+    }
+
+    if (!youtubeUrl || !title || !selectedViews || !selectedDuration) {
       Alert.alert('Error', 'Please fill in all fields and ensure video is valid');
       return;
     }
 
-    if (!user) {
-      Alert.alert('Error', 'Please log in to promote videos');
+    if (!isVideoValid) {
+      Alert.alert('Error', 'Please ensure the video URL is valid');
       return;
     }
 
     const cost = calculateCost();
     const reward = calculateReward();
 
-    if (profile && profile.coins < cost) {
+    if (profile.coins < cost) {
       Alert.alert('Insufficient Coins', `You need ${cost} coins to promote this video. You have ${profile.coins} coins.`);
       return;
     }
@@ -333,7 +345,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    maxHeight: 200,
+    maxHeight: 300,
+    zIndex: 1000,
   },
   dropdownItem: {
     paddingHorizontal: 16,

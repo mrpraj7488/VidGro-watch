@@ -66,7 +66,9 @@ export function getEmbedUrl(videoId: string, options: {
 
 // Generate a default title from video ID (logic-based approach)
 export function generateDefaultTitle(videoId: string): string {
-  return `Video ${videoId.substring(0, 8)}`;
+  // Create a more descriptive default title
+  const shortId = videoId.substring(0, 6);
+  return `YouTube Video ${shortId}`;
 }
 
 // Simple logic-based validation (no API required)
