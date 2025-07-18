@@ -80,9 +80,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = async (userId: string) => {
     try {
       const profileData = await getUserProfile(userId);
-      setProfile(profileData);
+      if (profileData) {
+        setProfile(profileData);
+      } else {
+        console.warn('No profile data returned for user:', userId);
+        // Create a minimal profile object to prevent app crashes
+        setProfile({
+          id: userId,
+          email: user?.email || 'unknown@example.com',
+          username: 'User',
+          coins: 0,
+          is_vip: false,
+          vip_expires_at: null,
+          referral_code: 'LOADING',
+          referred_by: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
     } catch (error) {
       console.error('Error loading profile:', error);
+      // Set a fallback profile to prevent crashes
+      setProfile({
+        id: userId,
+        email: user?.email || 'unknown@example.com',
+        username: 'User',
+        coins: 0,
+        is_vip: false,
+        vip_expires_at: null,
+        referral_code: 'ERROR',
+        referred_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
     }
   };
 

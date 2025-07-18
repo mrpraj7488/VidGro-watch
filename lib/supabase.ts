@@ -39,18 +39,23 @@ export const supabase = createClient(
 
 // Helper function to get user profile
 export async function getUserProfile(userId: string) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-  if (error) {
-    console.error('Error fetching user profile:', error);
+    if (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Profile fetch failed:', error);
     return null;
   }
-
-  return data;
 }
 
 // Helper function to update user coins
