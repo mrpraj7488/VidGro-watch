@@ -22,32 +22,10 @@ export default function SignupScreen() {
       return;
     }
 
-    // Enhanced email validation
-    const trimmedEmail = email.trim().toLowerCase();
-    
-    // Check basic format
-    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-    
-    // Check for valid email structure
-    const emailParts = trimmedEmail.split('@');
-    if (emailParts.length !== 2 || emailParts[0].length < 1 || emailParts[1].length < 3) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-    
-    // Check domain part
-    const domain = emailParts[1];
-    if (!domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-    
-    // Check for minimum length requirements
-    if (trimmedEmail.length < 5) {
-      Alert.alert('Error', 'Email address is too short');
+    // Minimal email validation - just check for @ symbol
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail.includes('@')) {
+      Alert.alert('Error', 'Please enter an email address with @ symbol');
       return;
     }
 
@@ -68,13 +46,11 @@ export default function SignupScreen() {
       if (error) {
         console.log('Signup error details:', error);
         
-        // Handle specific error types
-        if (error.message.includes('Email address') && error.message.includes('invalid')) {
-          Alert.alert('Invalid Email', 'Please enter a valid email address with proper format (e.g., user@example.com)');
-        } else if (error.message.includes('already registered')) {
+        // Simplified error handling
+        if (error.message.includes('already registered')) {
           Alert.alert('Account Exists', 'An account with this email already exists. Please try logging in instead.');
         } else {
-          Alert.alert('Signup Error', error.message || 'Failed to create account');
+          Alert.alert('Signup Error', 'Failed to create account. Please try again.');
         }
       } else {
         Alert.alert(

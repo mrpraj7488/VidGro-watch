@@ -28,19 +28,10 @@ export default function Login() {
       return;
     }
 
-    // Enhanced email validation
-    const trimmedEmail = email.trim().toLowerCase();
-    
-    // Check basic format
-    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-    
-    // Check for valid email structure
-    const emailParts = trimmedEmail.split('@');
-    if (emailParts.length !== 2 || emailParts[0].length < 1 || emailParts[1].length < 3) {
-      Alert.alert('Error', 'Please enter a valid email address');
+    // Minimal email validation - just check for @ symbol
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail.includes('@')) {
+      Alert.alert('Error', 'Please enter an email address with @ symbol');
       return;
     }
 
@@ -48,11 +39,7 @@ export default function Login() {
     try {
       const { error } = await signIn(trimmedEmail, password);
       if (error) {
-        if (error.message.includes('Email address') && error.message.includes('invalid')) {
-          Alert.alert('Invalid Email', 'Please enter a valid email address with proper format');
-        } else {
-          Alert.alert('Error', error.message || 'Invalid email or password');
-        }
+        Alert.alert('Error', 'Invalid email or password');
         return;
       }
       router.replace('/(tabs)');

@@ -26,6 +26,9 @@ export const supabase = createClient(
     persistSession: true,
     detectSessionInUrl: false,
     flowType: 'implicit',
+    // Disable all email confirmation requirements
+    confirmSignUp: false,
+    emailRedirectTo: undefined,
   },
   global: {
     headers: {
