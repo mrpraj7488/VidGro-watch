@@ -137,8 +137,11 @@ export default function AnalyticsTab() {
     console.log('fetchAnalytics called - user:', user?.id, 'isRefresh:', isRefresh);
     if (!user) return;
 
-    // Prevent multiple simultaneous calls
-    if (loading && !isRefresh) return;
+    // Prevent multiple simultaneous calls unless it's a refresh
+    if (loading && !isRefresh) {
+      console.log('Already loading, skipping fetch');
+      return;
+    }
 
     try {
       if (isRefresh) {
@@ -149,7 +152,7 @@ export default function AnalyticsTab() {
 
       console.log('Fetching analytics for user:', user.id);
 
-      // Fetch analytics data with fallback approach
+      // Initialize with default values
       let summaryData = {
         total_videos_promoted: 0,
         total_coins_earned: 0,
@@ -161,9 +164,20 @@ export default function AnalyticsTab() {
         on_hold_videos: 0,
       };
 
+      // Try to fetch analytics with timeout
       try {
-        const { data: analyticsData, error: analyticsError } = await supabase
+        const analyticsPromise = supabase
           .rpc('get_user_analytics_summary', { user_uuid: user.id });
+        
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Analytics fetch timeout')), 10000)
+        );
+        
+        const { data: analyticsData, error: analyticsError } = await Promise.race([
+          analyticsPromise,
+          timeoutPromise
+        ]) as any;
 
         console.log('Analytics RPC result:', { analyticsData, analyticsError });
 
@@ -187,38 +201,55 @@ export default function AnalyticsTab() {
       async function calculateAnalyticsManually() {
         console.log('Calculating analytics manually...');
         try {
-          // Get video count
-          const { count: videoCount } = await supabase
-            .from('videos')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id);
+          // Use Promise.all with timeout for parallel fetching
+          const fetchPromises = [
+            // Get video count
+            supabase
+              .from('videos')
+              .select('*', { count: 'exact', head: true })
+              .eq('user_id', user.id),
+            
+            // Get coins earned (positive transactions)
+            supabase
+              .from('coin_transactions')
+              .select('amount')
+              .eq('user_id', user.id)
+              .gt('amount', 0),
+            
+            // Get coins spent (negative transactions)
+            supabase
+              .from('coin_transactions')
+              .select('amount')
+              .eq('user_id', user.id)
+              .lt('amount', 0),
+            
+            // Get video stats
+            supabase
+              .from('videos')
+              .select('views_count, total_watch_time, status')
+              .eq('user_id', user.id)
+          ];
+          
+          // Add timeout to all promises
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Manual calculation timeout')), 8000)
+          );
+          
+          const results = await Promise.race([
+            Promise.all(fetchPromises),
+            timeoutPromise
+          ]) as any[];
+          
+          const [
+            { count: videoCount },
+            { data: earnedData },
+            { data: spentData },
+            { data: videoStats }
+          ] = results;
 
           console.log('Video count:', videoCount);
-
-          // Get coins earned (positive transactions)
-          const { data: earnedData } = await supabase
-            .from('coin_transactions')
-            .select('amount')
-            .eq('user_id', user.id)
-            .gt('amount', 0);
-
           console.log('Earned data:', earnedData);
-
-          // Get coins spent (negative transactions)
-          const { data: spentData } = await supabase
-            .from('coin_transactions')
-            .select('amount')
-            .eq('user_id', user.id)
-            .lt('amount', 0);
-
           console.log('Spent data:', spentData);
-
-          // Get video stats
-          const { data: videoStats } = await supabase
-            .from('videos')
-            .select('views_count, total_watch_time, status')
-            .eq('user_id', user.id);
-
           console.log('Video stats:', videoStats);
 
           summaryData = {
@@ -238,28 +269,45 @@ export default function AnalyticsTab() {
         }
       }
 
-      // Fetch promoted videos with detailed information
-      const { data: promotedVideos, error: videosError } = await supabase
-        .from('videos')
-        .select(`
-          *,
-          video_views(
-            id,
-            watched_duration,
-            completed,
-            coins_earned,
-            created_at
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      // Fetch promoted videos with timeout
+      let promotedVideos = [];
+      try {
+        const videosPromise = supabase
+          .from('videos')
+          .select(`
+            *,
+            video_views(
+              id,
+              watched_duration,
+              completed,
+              coins_earned,
+              created_at
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Videos fetch timeout')), 8000)
+        );
+        
+        const { data: videosData, error: videosError } = await Promise.race([
+          videosPromise,
+          timeoutPromise
+        ]) as any;
+        
+        if (videosError) throw videosError;
+        promotedVideos = videosData || [];
+      } catch (videosError) {
+        console.error('Error fetching videos:', videosError);
+        // Continue with empty array
+        promotedVideos = [];
+      }
 
       console.log('Promoted videos result:', { promotedVideos, videosError });
 
-      if (videosError) throw videosError;
-
       // Process videos with enhanced analytics
-      const videosWithAnalytics = (promotedVideos || []).map((video) => {
+      const videosWithAnalytics = promotedVideos.map((video) => {
         const progressPercentage = (video.views_count / video.target_views) * 100;
         return {
           ...video,
@@ -280,12 +328,21 @@ export default function AnalyticsTab() {
       // Fetch recent activity with error handling
       let activityData = [];
       try {
-        const { data, error: activityError } = await supabase
+        const activityPromise = supabase
           .from('coin_transactions')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(20);
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Activity fetch timeout')), 5000)
+        );
+        
+        const { data, error: activityError } = await Promise.race([
+          activityPromise,
+          timeoutPromise
+        ]) as any;
 
         if (activityError) {
           console.error('Error fetching activity:', activityError);
@@ -298,21 +355,7 @@ export default function AnalyticsTab() {
 
       console.log('Activity data:', activityData.length);
 
-      const finalAnalytics = {
-        totalVideosPromoted: summaryData.total_videos_promoted,
-        totalCoinsEarned: summaryData.total_coins_earned,
-        totalCoinsSpent: summaryData.total_coins_spent,
-        totalViewsReceived: summaryData.total_views_received,
-        totalWatchTime: summaryData.total_watch_time,
-        activeVideos: summaryData.active_videos,
-        completedVideos: summaryData.completed_videos,
-        onHoldVideos: summaryData.on_hold_videos,
-        recentActivities: activityData,
-        promotedVideos: videosWithAnalytics,
-      };
-
-      console.log('Setting final analytics:', finalAnalytics);
-
+      // Set analytics data
       setAnalytics({
         totalVideosPromoted: summaryData.total_videos_promoted,
         totalCoinsEarned: summaryData.total_coins_earned,
@@ -347,7 +390,7 @@ export default function AnalyticsTab() {
     } catch (error) {
       console.error('Error fetching analytics:', error);
       
-      // Set default analytics data instead of showing error
+      // Always set analytics data to prevent infinite loading
       setAnalytics({
         totalVideosPromoted: 0,
         totalCoinsEarned: 0,
@@ -361,16 +404,41 @@ export default function AnalyticsTab() {
         promotedVideos: [],
       });
       
-      // Only show alert in development
-      if (__DEV__) {
-        Alert.alert('Debug: Analytics Error', error.message || 'Failed to load analytics data');
-      }
+      console.warn('Analytics fetch failed, using default values');
     } finally {
       console.log('Analytics fetch completed, setting loading to false');
+      // Always set loading to false to prevent stuck state
       setLoading(false);
       setRefreshing(false);
     }
   };
+
+  // Add timeout for initial load to prevent infinite loading
+  useEffect(() => {
+    if (loading) {
+      const timeout = setTimeout(() => {
+        console.warn('Analytics loading timeout - forcing completion');
+        setLoading(false);
+        setRefreshing(false);
+        
+        // Set default analytics if still loading
+        setAnalytics(prev => prev.totalVideosPromoted === 0 ? {
+          totalVideosPromoted: 0,
+          totalCoinsEarned: 0,
+          totalCoinsSpent: 0,
+          totalViewsReceived: 0,
+          totalWatchTime: 0,
+          activeVideos: 0,
+          completedVideos: 0,
+          onHoldVideos: 0,
+          recentActivities: [],
+          promotedVideos: [],
+        } : prev);
+      }, 15000); // 15 second timeout
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [loading]);
 
   const checkVideoHoldStatus = async () => {
     if (!user) return;
