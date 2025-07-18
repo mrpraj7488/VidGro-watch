@@ -12,14 +12,13 @@ import {
   FlatList,
   StatusBar,
   Pressable,
-  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVideoStore } from '@/store/videoStore';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Eye, Clock, Trash2, Play, Timer, ChevronDown, Check, Pause, Save, CreditCard as Edit3 } from 'lucide-react-native';
+import { ArrowLeft, Eye, Clock, Trash2, Play, Timer, ChevronDown, Check } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -35,7 +34,6 @@ interface VideoData {
   id: string;
   youtube_url: string;
   title: string;
-  description?: string;
   views_count: number;
   target_views: number;
   coin_reward: number;
@@ -47,10 +45,6 @@ interface VideoData {
   duration_seconds: number;
   video_views?: any[];
   repromoted_at?: string;
-  total_watch_time?: number;
-  engagement_rate?: number;
-  completion_rate?: number;
-  average_watch_time?: number;
 }
 
 const VIEW_OPTIONS = [10, 25, 50, 100, 200, 500];
@@ -159,12 +153,6 @@ export default function EditVideoScreen() {
   const [showViewsDropdown, setShowViewsDropdown] = useState(false);
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
   const [repromoting, setRepromoting] = useState(false);
-  
-  // New state for editing functionality
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedTitle, setEditedTitle] = useState('');
-  const [editedDescription, setEditedDescription] = useState('');
-  const [saving, setSaving] = useState(false);
 
   // Animation values
   const coinBounce = useSharedValue(1);
@@ -176,16 +164,16 @@ export default function EditVideoScreen() {
       try {
         const video = JSON.parse(params.videoData as string);
         setVideoData(video);
-        setEditedTitle(video.title);
-        setEditedDescription(video.description || '');
         
         // Calculate hold timer if video is on hold
         if (video.status === 'on_hold') {
           let holdUntilTime: Date;
           
           if (video.hold_until) {
+            // Use the exact hold_until timestamp from database
             holdUntilTime = new Date(video.hold_until);
           } else {
+            // Fallback: calculate exactly 10 minutes from creation
             holdUntilTime = new Date(video.created_at);
             holdUntilTime.setMinutes(holdUntilTime.getMinutes() + 10);
           }
@@ -222,8 +210,6 @@ export default function EditVideoScreen() {
       }
 
       setVideoData(data);
-      setEditedTitle(data.title);
-      setEditedDescription(data.description || '');
       
       // Calculate hold timer if video is on hold
       if (data.status === 'on_hold') {
@@ -264,29 +250,31 @@ export default function EditVideoScreen() {
             ...prev,
             views_count: freshAnalytics.views_count || prev.views_count,
             status: freshAnalytics.status || prev.status,
-            total_watch_time: freshAnalytics.total_watch_time || prev.total_watch_time,
-            completion_rate: freshAnalytics.completion_rate || prev.completion_rate,
-            average_watch_time: freshAnalytics.average_watch_time || prev.average_watch_time,
+            display_views_count: freshAnalytics.display_views_count || freshAnalytics.views_count || prev.views_count,
+            progress_text: freshAnalytics.progress_text || `${freshAnalytics.views_count || prev.views_count}/${prev.target_views}`
           } : null);
         } else {
           // Fallback: fetch fresh data directly from videos table
           const { data: videoUpdate } = await supabase
             .from('videos')
-            .select('*')
+            .select('views_count, status')
             .eq('id', video.id)
             .single();
           
           if (videoUpdate) {
             setVideoData(prev => prev ? {
               ...prev,
-              ...videoUpdate,
+              views_count: videoUpdate.views_count,
+              status: videoUpdate.status,
+              display_views_count: videoUpdate.views_count,
+              progress_text: `${videoUpdate.views_count}/${prev.target_views}`
             } : null);
           }
         }
       } catch (error) {
         console.error('Error refreshing video analytics:', error);
       }
-    }, 2000); // Update every 2 seconds
+    }, 1000); // Update every 1 second for more responsive updates
     
     return () => clearInterval(interval);
   };
@@ -316,89 +304,6 @@ export default function EditVideoScreen() {
       return () => clearInterval(interval);
     }
   }, [holdTimer, videoData]);
-
-  const handleSaveChanges = async () => {
-    if (!videoData || !user) return;
-
-    if (!editedTitle.trim()) {
-      Alert.alert('Error', 'Title is required');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('videos')
-        .update({
-          title: editedTitle.trim(),
-          description: editedDescription.trim(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', videoData.id)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error updating video:', error);
-        Alert.alert('Error', 'Failed to update video');
-        return;
-      }
-
-      // Update local state
-      setVideoData(prev => prev ? {
-        ...prev,
-        title: editedTitle.trim(),
-        description: editedDescription.trim(),
-        updated_at: new Date().toISOString()
-      } : null);
-
-      setIsEditing(false);
-      Alert.alert('Success', 'Video updated successfully');
-    } catch (error) {
-      console.error('Error:', error);
-      Alert.alert('Error', 'Something went wrong');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleToggleStatus = async () => {
-    if (!videoData || !user) return;
-
-    const newStatus = videoData.status === 'active' ? 'paused' : 'active';
-    
-    Alert.alert(
-      'Confirm Action',
-      `Are you sure you want to ${newStatus === 'active' ? 'resume' : 'pause'} this video promotion?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: () => updateVideoStatus(newStatus) }
-      ]
-    );
-  };
-
-  const updateVideoStatus = async (newStatus: string) => {
-    if (!videoData || !user) return;
-
-    try {
-      const { error } = await supabase
-        .from('videos')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', videoData.id)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error updating status:', error);
-        Alert.alert('Error', 'Failed to update video status');
-        return;
-      }
-
-      setVideoData(prev => prev ? { ...prev, status: newStatus as any } : null);
-      Alert.alert('Success', `Video ${newStatus === 'active' ? 'resumed' : 'paused'} successfully`);
-    } catch (error) {
-      console.error('Error:', error);
-      Alert.alert('Error', 'Something went wrong');
-    }
-  };
 
   const getMinutesSinceCreation = () => {
     if (!videoData) return 0;
@@ -588,14 +493,6 @@ export default function EditVideoScreen() {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return '#2ECC71';
@@ -652,7 +549,7 @@ export default function EditVideoScreen() {
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(videoData.status) }]}>
               <Text style={styles.statusText}>{getStatusText(videoData.status)}</Text>
             </View>
-            <Text style={styles.videoId} numberOfLines={1}>ID: {videoData.id.substring(0, 8)}...</Text>
+            <Text style={styles.videoId}>ID: {videoData.youtube_url}</Text>
           </View>
         </View>
 
@@ -670,113 +567,6 @@ export default function EditVideoScreen() {
           </View>
         )}
 
-        {/* Video Details Section */}
-        <View style={styles.detailsSection}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Video Details</Text>
-            <TouchableOpacity 
-              style={styles.editToggleButton}
-              onPress={() => {
-                if (isEditing) {
-                  // Cancel editing
-                  setEditedTitle(videoData.title);
-                  setEditedDescription(videoData.description || '');
-                  setIsEditing(false);
-                } else {
-                  setIsEditing(true);
-                }
-              }}
-            >
-              <Edit3 size={16} color="#800080" />
-              <Text style={styles.editToggleText}>
-                {isEditing ? 'Cancel' : 'Edit'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.detailsCard}>
-            {isEditing ? (
-              <>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Title *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={editedTitle}
-                    onChangeText={setEditedTitle}
-                    placeholder="Enter video title"
-                    placeholderTextColor="#999"
-                    multiline
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Description</Text>
-                  <TextInput
-                    style={[styles.textInput, styles.textArea]}
-                    value={editedDescription}
-                    onChangeText={setEditedDescription}
-                    placeholder="Enter video description (optional)"
-                    placeholderTextColor="#999"
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.saveButton, saving && styles.buttonDisabled]}
-                  onPress={handleSaveChanges}
-                  disabled={saving}
-                >
-                  <Save size={16} color="white" />
-                  <Text style={styles.saveButtonText}>
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Title:</Text>
-                  <Text style={styles.detailValue}>{videoData.title}</Text>
-                </View>
-                
-                {videoData.description && (
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Description:</Text>
-                    <Text style={styles.detailValue}>{videoData.description}</Text>
-                  </View>
-                )}
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>YouTube URL:</Text>
-                  <Text style={styles.detailValue} numberOfLines={2}>{videoData.youtube_url}</Text>
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Duration:</Text>
-                  <Text style={styles.detailValue}>{videoData.duration_seconds} seconds</Text>
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Coin Cost:</Text>
-                  <Text style={styles.detailValue}>{videoData.coin_cost} coins</Text>
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Coin Reward:</Text>
-                  <Text style={styles.detailValue}>{videoData.coin_reward} coins per view</Text>
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Created:</Text>
-                  <Text style={styles.detailValue}>{formatDate(videoData.created_at)}</Text>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-
         {/* Main Metrics */}
         <View style={styles.metricsSection}>
           <Text style={styles.sectionTitle}>Video Metrics</Text>
@@ -791,22 +581,6 @@ export default function EditVideoScreen() {
               <Text style={styles.metricValue}>
                 {videoData.views_count}/{videoData.target_views}
               </Text>
-              <View style={styles.progressContainer}>
-                <View style={styles.progressBar}>
-                  <View 
-                    style={[
-                      styles.progressFill, 
-                      { 
-                        width: `${Math.min((videoData.views_count / videoData.target_views) * 100, 100)}%`,
-                        backgroundColor: getStatusColor(videoData.status)
-                      }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.progressText}>
-                  {Math.round((videoData.views_count / videoData.target_views) * 100)}%
-                </Text>
-              </View>
             </View>
 
             {/* Watch Duration */}
@@ -818,59 +592,13 @@ export default function EditVideoScreen() {
               <Text style={styles.metricValue}>
                 {videoData.duration_seconds}s
               </Text>
-              {videoData.total_watch_time && (
-                <Text style={styles.metricSubtext}>
-                  Total: {Math.round(videoData.total_watch_time / 60)}m watched
-                </Text>
-              )}
             </View>
           </View>
-
-          {/* Additional Analytics */}
-          {(videoData.completion_rate || videoData.average_watch_time) && (
-            <View style={styles.analyticsGrid}>
-              {videoData.completion_rate && (
-                <View style={styles.analyticsCard}>
-                  <Text style={styles.analyticsLabel}>Completion Rate</Text>
-                  <Text style={styles.analyticsValue}>{videoData.completion_rate.toFixed(1)}%</Text>
-                </View>
-              )}
-              
-              {videoData.average_watch_time && (
-                <View style={styles.analyticsCard}>
-                  <Text style={styles.analyticsLabel}>Avg Watch Time</Text>
-                  <Text style={styles.analyticsValue}>{videoData.average_watch_time.toFixed(0)}s</Text>
-                </View>
-              )}
-            </View>
-          )}
         </View>
 
         {/* Action Buttons */}
         <View style={styles.actionSection}>
           <Text style={styles.sectionTitle}>Actions</Text>
-
-          {/* Pause/Resume Button */}
-          {(videoData.status === 'active' || videoData.status === 'paused') && (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.toggleButton]}
-              onPress={handleToggleStatus}
-            >
-              {videoData.status === 'active' ? (
-                <Pause color="white" size={20} />
-              ) : (
-                <Play color="white" size={20} />
-              )}
-              <View style={styles.actionContent}>
-                <Text style={styles.actionButtonText}>
-                  {videoData.status === 'active' ? 'Pause Promotion' : 'Resume Promotion'}
-                </Text>
-                <Text style={styles.actionSubtext}>
-                  {videoData.status === 'active' ? 'Stop showing to viewers' : 'Start showing to viewers again'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
 
           {/* Delete Button */}
           <TouchableOpacity 
@@ -1142,105 +870,6 @@ const styles = StyleSheet.create({
     color: '#F57C00',
     marginTop: 4,
   },
-  detailsSection: {
-    margin: 16,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  editToggleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3E5F5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 4,
-  },
-  editToggleText: {
-    fontSize: 12,
-    color: '#800080',
-    fontWeight: '600',
-  },
-  detailsCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-      web: {
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-      },
-    }),
-  },
-  detailItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-    flex: 1,
-  },
-  detailValue: {
-    fontSize: 14,
-    color: '#333',
-    flex: 2,
-    textAlign: 'right',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  textInput: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  textArea: {
-    height: 80,
-    paddingTop: 12,
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#800080',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   metricsSection: {
     margin: 16,
   },
@@ -1253,7 +882,6 @@ const styles = StyleSheet.create({
   metricsGrid: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 16,
   },
   metricCard: {
     flex: 1,
@@ -1290,69 +918,6 @@ const styles = StyleSheet.create({
     fontSize: isSmallScreen ? 16 : 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
-  },
-  metricSubtext: {
-    fontSize: 12,
-    color: '#666',
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  progressBar: {
-    flex: 1,
-    height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '600',
-    minWidth: 35,
-    textAlign: 'right',
-  },
-  analyticsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  analyticsCard: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-      web: {
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
-      },
-    }),
-  },
-  analyticsLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  analyticsValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
   },
   actionSection: {
     margin: 16,
@@ -1363,9 +928,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-  },
-  toggleButton: {
-    backgroundColor: '#3498DB',
   },
   deleteButton: {
     backgroundColor: '#E74C3C',
