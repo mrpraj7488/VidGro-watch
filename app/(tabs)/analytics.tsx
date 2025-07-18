@@ -114,16 +114,15 @@ export default function AnalyticsTab() {
       if (user) {
         fetchAnalytics();
         
-        // Set up periodic refresh - less frequent to avoid excessive calls
+        // Set up periodic refresh for hold timers only
         const interval = setInterval(() => {
-          checkVideoHoldStatus();
           updateHoldTimers();
-        }, 5000); // Check every 5 seconds instead of 2
+        }, 5000);
         
-        // Separate interval for analytics refresh - much less frequent
+        // Separate interval for hold status check - less frequent
         const analyticsInterval = setInterval(() => {
-          fetchAnalytics();
-        }, 30000); // Refresh analytics every 30 seconds
+          checkVideoHoldStatus();
+        }, 30000); // Check hold status every 30 seconds
         
         return () => {
           clearInterval(interval);
@@ -304,7 +303,7 @@ export default function AnalyticsTab() {
         promotedVideos = [];
       }
 
-      console.log('Promoted videos result:', { promotedVideos, videosError });
+      console.log('Promoted videos result:', { promotedVideos });
 
       // Process videos with enhanced analytics
       const videosWithAnalytics = promotedVideos.map((video) => {
@@ -451,7 +450,7 @@ export default function AnalyticsTab() {
       if (data > 0) {
         console.log(`📊 Released ${data} videos from hold to queue`);
         // Only refresh analytics if videos were actually released
-        setTimeout(() => fetchAnalytics(), 1000); // Debounce the refresh
+        fetchAnalytics();
         clearQueue();
       }
     } catch (error) {
@@ -466,9 +465,9 @@ export default function AnalyticsTab() {
       
       Object.keys(updated).forEach(videoId => {
         if (updated[videoId] > 0) {
-          updated[videoId] = Math.max(0, updated[videoId] - 5); // Adjust for 5-second interval
+          updated[videoId] = Math.max(0, updated[videoId] - 5);
           hasChanges = true;
-        } else if (updated[videoId] === 0) {
+        } else if (updated[videoId] <= 0) {
           delete updated[videoId];
           hasChanges = true;
         }
