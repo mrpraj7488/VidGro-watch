@@ -25,6 +25,8 @@ export const supabase = createClient(
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // Disable email confirmation
+    flowType: 'pkce',
   },
 });
 

@@ -25,7 +25,7 @@ export default function SignupScreen() {
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert('Error', 'Please enter a valid email address (example: user@domain.com)');
       return;
     }
 
