@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  Platform,
   Alert,
   RefreshControl,
 } from 'react-native';
@@ -19,9 +18,7 @@ import {
   ChevronDown, 
   ChevronUp, 
   CreditCard as Edit3, 
-  RotateCcw, 
   Eye, 
-  Clock, 
   Timer, 
   Activity, 
   DollarSign, 
@@ -30,14 +27,6 @@ import {
   RefreshCw
 } from 'lucide-react-native';
 import GlobalHeader from '../../components/GlobalHeader';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withTiming,
-  withSpring,
-  Easing,
-  withSequence
-} from 'react-native-reanimated';
 import { useFocusEffect } from '@react-navigation/native';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -111,12 +100,6 @@ export default function AnalyticsTab() {
   const [showMoreActivities, setShowMoreActivities] = useState(false);
   const [holdTimers, setHoldTimers] = useState<{[key: string]: number}>({});
 
-  // Animation values
-  const videosHeight = useSharedValue(0);
-  const activitiesHeight = useSharedValue(0);
-  const coinBounce = useSharedValue(1);
-  const refreshRotation = useSharedValue(0);
-
   // Auto-refresh and real-time updates
   useFocusEffect(
     useCallback(() => {
@@ -142,7 +125,6 @@ export default function AnalyticsTab() {
     try {
       if (isRefresh) {
         setRefreshing(true);
-        refreshRotation.value = withTiming(360, { duration: 1000 });
       } else {
         setLoading(true);
       }
@@ -242,21 +224,12 @@ export default function AnalyticsTab() {
       });
       setHoldTimers(newHoldTimers);
 
-      // Animate coin bounce on refresh
-      if (isRefresh) {
-        coinBounce.value = withSequence(
-          withSpring(1.2, { damping: 8 }),
-          withSpring(1, { damping: 8 })
-        );
-      }
-
     } catch (error) {
       console.error('Error fetching analytics:', error);
       Alert.alert('Error', 'Failed to load analytics data');
     } finally {
       setLoading(false);
       setRefreshing(false);
-      refreshRotation.value = 0;
     }
   };
 
@@ -308,18 +281,10 @@ export default function AnalyticsTab() {
 
   const toggleVideosExpansion = () => {
     setShowMoreVideos(!showMoreVideos);
-    videosHeight.value = withTiming(showMoreVideos ? 0 : 1, {
-      duration: 300,
-      easing: Easing.out(Easing.quad),
-    });
   };
 
   const toggleActivitiesExpansion = () => {
     setShowMoreActivities(!showMoreActivities);
-    activitiesHeight.value = withTiming(showMoreActivities ? 0 : 1, {
-      duration: 300,
-      easing: Easing.out(Easing.quad),
-    });
   };
 
   const formatDate = (dateString: string) => {
@@ -398,24 +363,6 @@ export default function AnalyticsTab() {
     }
   };
 
-  const videosAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: videosHeight.value,
-    transform: [{ scaleY: videosHeight.value }],
-  }));
-
-  const activitiesAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: activitiesHeight.value,
-    transform: [{ scaleY: activitiesHeight.value }],
-  }));
-
-  const coinAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: coinBounce.value }],
-  }));
-
-  const refreshAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${refreshRotation.value}deg` }],
-  }));
-
   const displayedVideos = showMoreVideos ? analytics.promotedVideos : analytics.promotedVideos.slice(0, 4);
   const displayedActivities = showMoreActivities ? analytics.recentActivities : analytics.recentActivities.slice(0, 3);
 
@@ -466,9 +413,9 @@ export default function AnalyticsTab() {
           </View>
           
           <View style={styles.metricCard}>
-            <Animated.View style={[styles.metricIcon, { backgroundColor: '#2ECC71' }, coinAnimatedStyle]}>
+            <View style={[styles.metricIcon, { backgroundColor: '#2ECC71' }]}>
               <Coins size={24} color="white" />
-            </Animated.View>
+            </View>
             <Text style={styles.metricValue}>{analytics.totalCoinsEarned}</Text>
             <Text style={styles.metricLabel}>Coins Earned</Text>
           </View>
@@ -479,9 +426,7 @@ export default function AnalyticsTab() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Promoted Videos</Text>
             <TouchableOpacity onPress={() => fetchAnalytics(true)}>
-              <Animated.View style={refreshAnimatedStyle}>
-                <RefreshCw size={20} color="#800080" />
-              </Animated.View>
+              <RefreshCw size={20} color="#800080" />
             </TouchableOpacity>
           </View>
 
