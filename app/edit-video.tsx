@@ -384,6 +384,13 @@ export default function EditVideoScreen() {
     );
   };
 
+  // Force analytics refresh when navigating back
+  const handleNavigateBack = () => {
+    // Clear any cached data
+    clearQueue();
+    router.back();
+  };
+
   const calculateCoinCost = (views: number, duration: number) => {
     // Base cost calculation: views * duration factor
     const durationFactor = duration / 30; // 30 seconds as base
@@ -469,7 +476,7 @@ export default function EditVideoScreen() {
       Alert.alert(
         'Success',
         `Video repromoted successfully! It's now active in the queue with ${selectedViews} target views.`,
-        [{ text: 'OK', onPress: () => router.back() }]
+        [{ text: 'OK', onPress: handleNavigateBack }]
       );
     } catch (error) {
       console.error('Error repromoting video:', error);
@@ -531,7 +538,7 @@ export default function EditVideoScreen() {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient colors={['#800080', '#800080']} style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={handleNavigateBack}>
           <ArrowLeft color="white" size={24} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>

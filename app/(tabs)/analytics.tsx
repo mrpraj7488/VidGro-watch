@@ -100,9 +100,17 @@ export default function AnalyticsTab() {
   const [showMoreActivities, setShowMoreActivities] = useState(false);
   const [holdTimers, setHoldTimers] = useState<{[key: string]: number}>({});
 
+  // Add debug logging
+  useEffect(() => {
+    console.log('Analytics Tab - User:', user?.id);
+    console.log('Analytics Tab - Profile:', profile?.username, profile?.coins);
+    console.log('Analytics Tab - Loading:', loading);
+  }, [user, profile, loading]);
+
   // Focus effect for initial load and periodic updates
   useFocusEffect(
     useCallback(() => {
+      console.log('Analytics Tab - Focus effect triggered, user:', user?.id);
       if (user) {
         fetchAnalytics();
         
@@ -126,6 +134,7 @@ export default function AnalyticsTab() {
   );
 
   const fetchAnalytics = async (isRefresh = false) => {
+    console.log('fetchAnalytics called - user:', user?.id, 'isRefresh:', isRefresh);
     if (!user) return;
 
     // Prevent multiple simultaneous calls
@@ -137,6 +146,8 @@ export default function AnalyticsTab() {
       } else {
         setLoading(true);
       }
+
+      console.log('Fetching analytics for user:', user.id);
 
       // Fetch analytics data with fallback approach
       let summaryData = {
@@ -154,13 +165,17 @@ export default function AnalyticsTab() {
         const { data: analyticsData, error: analyticsError } = await supabase
           .rpc('get_user_analytics_summary', { user_uuid: user.id });
 
+        console.log('Analytics RPC result:', { analyticsData, analyticsError });
+
         if (analyticsError) {
           console.error('Analytics RPC error:', analyticsError);
           // Fall back to manual calculation
           await calculateAnalyticsManually();
         } else if (analyticsData && analyticsData.length > 0) {
           summaryData = analyticsData[0];
+          console.log('Using RPC analytics data:', summaryData);
         } else {
+          console.log('No RPC data, falling back to manual calculation');
           // Fall back to manual calculation
           await calculateAnalyticsManually();
         }
@@ -170,12 +185,15 @@ export default function AnalyticsTab() {
       }
 
       async function calculateAnalyticsManually() {
+        console.log('Calculating analytics manually...');
         try {
           // Get video count
           const { count: videoCount } = await supabase
             .from('videos')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', user.id);
+
+          console.log('Video count:', videoCount);
 
           // Get coins earned (positive transactions)
           const { data: earnedData } = await supabase
@@ -184,6 +202,8 @@ export default function AnalyticsTab() {
             .eq('user_id', user.id)
             .gt('amount', 0);
 
+          console.log('Earned data:', earnedData);
+
           // Get coins spent (negative transactions)
           const { data: spentData } = await supabase
             .from('coin_transactions')
@@ -191,11 +211,15 @@ export default function AnalyticsTab() {
             .eq('user_id', user.id)
             .lt('amount', 0);
 
+          console.log('Spent data:', spentData);
+
           // Get video stats
           const { data: videoStats } = await supabase
             .from('videos')
             .select('views_count, total_watch_time, status')
             .eq('user_id', user.id);
+
+          console.log('Video stats:', videoStats);
 
           summaryData = {
             total_videos_promoted: videoCount || 0,
@@ -207,6 +231,7 @@ export default function AnalyticsTab() {
             completed_videos: videoStats?.filter(v => v.status === 'completed').length || 0,
             on_hold_videos: videoStats?.filter(v => v.status === 'on_hold').length || 0,
           };
+          console.log('Manual calculation result:', summaryData);
         } catch (manualError) {
           console.error('Manual calculation also failed:', manualError);
           // Keep default values
@@ -229,6 +254,8 @@ export default function AnalyticsTab() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
+      console.log('Promoted videos result:', { promotedVideos, videosError });
+
       if (videosError) throw videosError;
 
       // Process videos with enhanced analytics
@@ -242,6 +269,8 @@ export default function AnalyticsTab() {
           fresh_data: true
         };
       });
+
+      console.log('Videos with analytics:', videosWithAnalytics.length);
 
       // Enhanced profile refresh for guaranteed coin balance updates
       if (isRefresh) {
@@ -266,6 +295,23 @@ export default function AnalyticsTab() {
       } catch (activityFetchError) {
         console.error('Activity fetch failed:', activityFetchError);
       }
+
+      console.log('Activity data:', activityData.length);
+
+      const finalAnalytics = {
+        totalVideosPromoted: summaryData.total_videos_promoted,
+        totalCoinsEarned: summaryData.total_coins_earned,
+        totalCoinsSpent: summaryData.total_coins_spent,
+        totalViewsReceived: summaryData.total_views_received,
+        totalWatchTime: summaryData.total_watch_time,
+        activeVideos: summaryData.active_videos,
+        completedVideos: summaryData.completed_videos,
+        onHoldVideos: summaryData.on_hold_videos,
+        recentActivities: activityData,
+        promotedVideos: videosWithAnalytics,
+      };
+
+      console.log('Setting final analytics:', finalAnalytics);
 
       setAnalytics({
         totalVideosPromoted: summaryData.total_videos_promoted,
@@ -320,6 +366,7 @@ export default function AnalyticsTab() {
         Alert.alert('Debug: Analytics Error', error.message || 'Failed to load analytics data');
       }
     } finally {
+      console.log('Analytics fetch completed, setting loading to false');
       setLoading(false);
       setRefreshing(false);
     }

@@ -19,6 +19,7 @@ interface VideoState {
   moveToNextVideo: () => void;
   handleVideoError: (videoId: string) => void;
   resetQueue: () => void;
+  clearQueue: () => void;
 }
 
 export const useVideoStore = create<VideoState>((set, get) => ({
@@ -74,6 +75,16 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   },
 
   resetQueue: () => {
+    set({ 
+      videoQueue: [], 
+      currentVideoIndex: 0, 
+      isLoading: false,
+      blacklistedVideoIds: []
+    });
+  },
+
+  clearQueue: () => {
+    console.log('Video queue cleared - forcing refresh');
     set({ 
       videoQueue: [], 
       currentVideoIndex: 0, 
