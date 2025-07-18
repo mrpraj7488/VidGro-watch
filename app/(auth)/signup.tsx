@@ -22,6 +22,13 @@ export default function SignupScreen() {
       return;
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
       return;
@@ -34,10 +41,11 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      const { error } = await signUp(email, password, username);
+      const { error } = await signUp(email.trim().toLowerCase(), password, username.trim());
 
       if (error) {
-        Alert.alert('Signup Error', error.message);
+        console.log('Signup error details:', error);
+        Alert.alert('Signup Error', error.message || 'Failed to create account');
       } else {
         Alert.alert(
           'Account Created!',

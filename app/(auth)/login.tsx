@@ -28,11 +28,23 @@ export default function Login() {
       return;
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
     try {
-      await signIn(email, password);
+      const { error } = await signIn(email.trim().toLowerCase(), password);
+      if (error) {
+        Alert.alert('Error', error.message || 'Invalid email or password');
+        return;
+      }
       router.replace('/(tabs)');
     } catch (error) {
+      console.error('Login error:', error);
       Alert.alert('Error', 'Invalid email or password');
     } finally {
       setLoading(false);
