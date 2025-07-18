@@ -135,6 +135,7 @@ export default function PromoteTab() {
     <View style={styles.container}>
       <GlobalHeader 
         title="Promote" 
+        showCoinDisplay={true}
         menuVisible={menuVisible} 
         setMenuVisible={setMenuVisible} 
       />

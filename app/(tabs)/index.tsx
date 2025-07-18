@@ -147,6 +147,7 @@ export default function ViewTab() {
       <View style={styles.container}>
         <GlobalHeader 
           title="View" 
+          showCoinDisplay={true}
           menuVisible={menuVisible} 
           setMenuVisible={setMenuVisible} 
         />
@@ -162,6 +163,7 @@ export default function ViewTab() {
       <View style={styles.container}>
         <GlobalHeader 
           title="View" 
+          showCoinDisplay={true}
           menuVisible={menuVisible} 
           setMenuVisible={setMenuVisible} 
         />
@@ -187,6 +189,7 @@ export default function ViewTab() {
     <View style={styles.container}>
       <GlobalHeader 
         title="View" 
+        showCoinDisplay={true}
         menuVisible={menuVisible} 
         setMenuVisible={setMenuVisible} 
       />

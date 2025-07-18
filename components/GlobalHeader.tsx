@@ -33,19 +33,29 @@ export default function GlobalHeader({
     { icon: Trash2, title: 'Delete Account', route: '/delete-account', color: '#E74C3C' },
   ];
 
-  const handleItemPress = (item: any) => {
+  const handleItemPress = async (item: any) => {
     if (item.action === 'logout') {
-      handleLogout();
+      await handleLogout();
     } else if (item.route) {
       router.push(item.route);
       setMenuVisible(false);
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (): Promise<void> => {
+    console.log('GlobalHeader: Logout initiated');
     setMenuVisible(false);
-    await signOut();
-    router.replace('/(auth)/login');
+    
+    try {
+      console.log('GlobalHeader: Calling signOut function');
+      await signOut();
+      console.log('GlobalHeader: SignOut completed, navigating to login');
+      router.replace('/(auth)/login');
+    } catch (error) {
+      console.error('GlobalHeader: Logout error:', error);
+      // Force navigation even if signOut fails
+      router.replace('/(auth)/login');
+    }
   };
 
   const renderSideMenu = () => (
