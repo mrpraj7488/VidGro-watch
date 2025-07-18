@@ -106,12 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, username: string) => {
     console.log('Attempting signup with:', { email, username });
     
-    // Basic email format validation before sending to Supabase
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return { error: { message: 'Please enter a valid email address' } };
-    }
-    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -119,7 +113,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           username,
         },
-        emailRedirectTo: undefined, // Disable email confirmation
       },
     });
     

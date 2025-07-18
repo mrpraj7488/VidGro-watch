@@ -28,18 +28,31 @@ export default function Login() {
       return;
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      Alert.alert('Error', 'Please enter a valid email address (example: user@domain.com)');
+    // Enhanced email validation
+    const trimmedEmail = email.trim().toLowerCase();
+    
+    // Check basic format
+    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+    
+    // Check for valid email structure
+    const emailParts = trimmedEmail.split('@');
+    if (emailParts.length !== 2 || emailParts[0].length < 1 || emailParts[1].length < 3) {
+      Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
 
     setLoading(true);
     try {
-      const { error } = await signIn(email.trim().toLowerCase(), password);
+      const { error } = await signIn(trimmedEmail, password);
       if (error) {
-        Alert.alert('Error', error.message || 'Invalid email or password');
+        if (error.message.includes('Email address') && error.message.includes('invalid')) {
+          Alert.alert('Invalid Email', 'Please enter a valid email address with proper format');
+        } else {
+          Alert.alert('Error', error.message || 'Invalid email or password');
+        }
         return;
       }
       router.replace('/(tabs)');

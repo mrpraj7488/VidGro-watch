@@ -25,8 +25,12 @@ export const supabase = createClient(
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-    // Disable email confirmation
-    flowType: 'pkce',
+    flowType: 'implicit',
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'vidgro-app',
+    },
   },
 });
 
