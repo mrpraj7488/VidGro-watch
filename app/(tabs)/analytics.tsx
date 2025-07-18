@@ -100,27 +100,36 @@ export default function AnalyticsTab() {
   const [showMoreActivities, setShowMoreActivities] = useState(false);
   const [holdTimers, setHoldTimers] = useState<{[key: string]: number}>({});
 
-  // Auto-refresh and real-time updates
+  // Focus effect for initial load and periodic updates
   useFocusEffect(
     useCallback(() => {
       if (user) {
         fetchAnalytics();
         
-        // Set up more frequent refresh for real-time updates
+        // Set up periodic refresh - less frequent to avoid excessive calls
         const interval = setInterval(() => {
           checkVideoHoldStatus();
           updateHoldTimers();
-          // Also refresh analytics data more frequently
-          fetchAnalytics();
-        }, 2000); // Check every 2 seconds for more responsive updates
+        }, 5000); // Check every 5 seconds instead of 2
         
-        return () => clearInterval(interval);
+        // Separate interval for analytics refresh - much less frequent
+        const analyticsInterval = setInterval(() => {
+          fetchAnalytics();
+        }, 30000); // Refresh analytics every 30 seconds
+        
+        return () => {
+          clearInterval(interval);
+          clearInterval(analyticsInterval);
+        };
       }
     }, [user])
   );
 
   const fetchAnalytics = async (isRefresh = false) => {
     if (!user) return;
+
+    // Prevent multiple simultaneous calls
+    if (loading && !isRefresh) return;
 
     try {
       if (isRefresh) {
@@ -179,7 +188,9 @@ export default function AnalyticsTab() {
       });
 
       // Enhanced profile refresh for guaranteed coin balance updates
-      await refreshProfile();
+      if (isRefresh) {
+        await refreshProfile();
+      }
 
       // Fetch recent activity
       const { data: activityData, error: activityError } = await supabase
@@ -243,7 +254,8 @@ export default function AnalyticsTab() {
       
       if (data > 0) {
         console.log(`📊 Released ${data} videos from hold to queue`);
-        fetchAnalytics();
+        // Only refresh analytics if videos were actually released
+        setTimeout(() => fetchAnalytics(), 1000); // Debounce the refresh
         clearQueue();
       }
     } catch (error) {
@@ -258,7 +270,7 @@ export default function AnalyticsTab() {
       
       Object.keys(updated).forEach(videoId => {
         if (updated[videoId] > 0) {
-          updated[videoId] = Math.max(0, updated[videoId] - 2);
+          updated[videoId] = Math.max(0, updated[videoId] - 5); // Adjust for 5-second interval
           hasChanges = true;
         } else if (updated[videoId] === 0) {
           delete updated[videoId];
