@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, getUserProfile } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
-import { useRouter } from 'expo-router';
 
 interface Profile {
   id: string;
@@ -40,7 +39,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     // Get initial session
@@ -59,23 +57,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         if (session?.user) {
           await loadProfile(session.user.id);
-          // Navigate to main app after successful authentication
-          if (event === 'SIGNED_IN') {
-            router.replace('/(tabs)');
-          }
         } else {
           setProfile(null);
-          // Navigate to login when signed out
-          if (event === 'SIGNED_OUT') {
-            router.replace('/(auth)/login');
-          }
         }
         setLoading(false);
       }
     );
 
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, []);
 
   const loadProfile = async (userId: string) => {
     try {
