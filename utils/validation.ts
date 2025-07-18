@@ -5,15 +5,15 @@ export interface ValidationResult {
   error?: string;
 }
 
-// Email validation
+// Simplified email validation (basic format check only)
 export function validateEmail(email: string): ValidationResult {
   if (!email) {
     return { isValid: false, error: 'Email is required' };
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return { isValid: false, error: 'Please enter a valid email address' };
+  // Basic format check only - no complex validation
+  if (!email.includes('@') || !email.includes('.')) {
+    return { isValid: false, error: 'Please enter a valid email format' };
   }
 
   return { isValid: true };
@@ -54,8 +54,8 @@ export function validateUsername(username: string): ValidationResult {
   return { isValid: true };
 }
 
-// YouTube URL validation
-export function validateYouTubeUrl(url: string, skipEmbedCheck: boolean = false): ValidationResult {
+// YouTube URL validation (logic-based only)
+export function validateYouTubeUrl(url: string): ValidationResult {
   if (!url) {
     return { isValid: false, error: 'YouTube URL is required' };
   }
@@ -63,11 +63,6 @@ export function validateYouTubeUrl(url: string, skipEmbedCheck: boolean = false)
   const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (!youtubeRegex.test(url)) {
     return { isValid: false, error: 'Please enter a valid YouTube URL' };
-  }
-
-  // Skip embed check for basic URL validation
-  if (skipEmbedCheck) {
-    return { isValid: true };
   }
 
   return { isValid: true };

@@ -64,100 +64,18 @@ export function getEmbedUrl(videoId: string, options: {
   return `https://www.youtube.com/embed/${videoId}${queryString ? `?${queryString}` : ''}`;
 }
 
-// Extract video title from YouTube page (system-based approach)
-export async function extractVideoTitle(videoId: string): Promise<string | null> {
-  try {
-    // Try to fetch the YouTube page and extract title from meta tags
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const html = await response.text();
-    
-    // Extract title from various possible meta tags
-    const titlePatterns = [
-      /<meta property="og:title" content="([^"]+)"/,
-      /<meta name="title" content="([^"]+)"/,
-      /<title>([^<]+)<\/title>/,
-      /"title":"([^"]+)"/
-    ];
-
-    for (const pattern of titlePatterns) {
-      const match = html.match(pattern);
-      if (match && match[1]) {
-        // Clean up the title (remove " - YouTube" suffix if present)
-        let title = match[1].replace(/ - YouTube$/, '').trim();
-        // Decode HTML entities
-        title = title.replace(/"/g, '"')
-                    .replace(/&#39;/g, "'")
-                    .replace(/&/g, '&')
-                    .replace(/</g, '<')
-                    .replace(/>/g, '>');
-        return title;
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error extracting video title:', error);
-    return null;
-  }
+// Generate a default title from video ID (logic-based approach)
+export function generateDefaultTitle(videoId: string): string {
+  return `Video ${videoId.substring(0, 8)}`;
 }
 
-// Check if video is embeddable by testing iframe load
-export function checkVideoEmbeddable(videoId: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (typeof document === 'undefined') {
-      // Not in browser environment, assume embeddable
-      resolve(true);
-      return;
-    }
-
-    const iframe = document.createElement('iframe');
-    iframe.src = getEmbedUrl(videoId, { autoplay: false, controls: true });
-    iframe.style.display = 'none';
-    iframe.width = '1';
-    iframe.height = '1';
-    
-    let resolved = false;
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        document.body.removeChild(iframe);
-        resolve(false);
-      }
-    }, 5000); // 5 second timeout
-
-    iframe.onload = () => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeout);
-        document.body.removeChild(iframe);
-        resolve(true);
-      }
-    };
-
-    iframe.onerror = () => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeout);
-        document.body.removeChild(iframe);
-        resolve(false);
-      }
-    };
-
-    document.body.appendChild(iframe);
-  });
+// Simple logic-based validation (no API required)
+export function validateVideoLogic(videoId: string): boolean {
+  // Basic validation: check if video ID format is correct
+  return videoId && videoId.length === 11 && /^[a-zA-Z0-9_-]+$/.test(videoId);
 }
 
-// Validate video for promotion (system-based)
+// Validate video for promotion (logic-based only)
 export async function validateVideoForPromotion(url: string): Promise<{
   isValid: boolean;
   videoInfo?: YouTubeVideoInfo;
@@ -172,32 +90,23 @@ export async function validateVideoForPromotion(url: string): Promise<{
     };
   }
 
+  // Logic-based validation only
+  if (!validateVideoLogic(videoId)) {
+    return {
+      isValid: false,
+      error: 'Invalid video ID format'
+    };
+  }
+
   try {
-    // Check if video is embeddable
-    const isEmbeddable = await checkVideoEmbeddable(videoId);
+    // Generate default title from video ID
+    const title = generateDefaultTitle(videoId);
     
-    if (!isEmbeddable) {
-      return {
-        isValid: false,
-        error: 'Video is not embeddable or may be restricted'
-      };
-    }
-
-    // Extract video title
-    const title = await extractVideoTitle(videoId);
-    
-    if (!title) {
-      return {
-        isValid: false,
-        error: 'Could not extract video title. Video may be private or restricted.'
-      };
-    }
-
     const videoInfo: YouTubeVideoInfo = {
       id: videoId,
       title,
       thumbnail: getThumbnailUrl(videoId),
-      isEmbeddable: true,
+      isEmbeddable: true, // Assume embeddable for logic-based validation
       embedUrl: getEmbedUrl(videoId, { autoplay: true, controls: true })
     };
 
@@ -208,7 +117,7 @@ export async function validateVideoForPromotion(url: string): Promise<{
   } catch (error) {
     return {
       isValid: false,
-      error: 'Failed to validate video. Please check the URL and try again.'
+      error: 'Invalid video URL format'
     };
   }
 }
@@ -328,8 +237,8 @@ export default {
   extractVideoId,
   getThumbnailUrl,
   getEmbedUrl,
-  extractVideoTitle,
-  checkVideoEmbeddable,
+  generateDefaultTitle,
+  validateVideoLogic,
   validateVideoForPromotion,
   formatViewCount,
   formatDuration,

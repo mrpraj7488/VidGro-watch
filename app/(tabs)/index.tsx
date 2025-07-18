@@ -186,7 +186,7 @@ export default function ViewTab() {
   return (
     <View style={styles.container}>
       <GlobalHeader 
-        title="Video Promoter" 
+        title="View" 
         menuVisible={menuVisible} 
         setMenuVisible={setMenuVisible} 
       />

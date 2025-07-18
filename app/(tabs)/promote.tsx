@@ -226,11 +226,11 @@ export default function PromoteTab() {
               )}
             </View>
           )}
-            <VideoPreview 
-              youtubeUrl={youtubeUrl}
-              onValidation={handleVideoValidation}
-              collapsed={isVideoValid && youtubeUrl.length > 0}
-            />
+          <VideoPreview 
+            youtubeUrl={youtubeUrl}
+            onValidation={handleVideoValidation}
+            collapsed={isVideoValid && youtubeUrl.length > 0}
+          />
 
 
           <TouchableOpacity
@@ -250,7 +250,7 @@ export default function PromoteTab() {
           <View style={styles.infoContainer}>
             <Text style={styles.infoTitle}>How it works:</Text>
             <Text style={styles.infoText}>
-              1. Paste your YouTube video URL and verify it's embeddable{'\n'}
+              1. Paste your YouTube video URL{'\n'}
               2. Your video enters a 10-minute hold period{'\n'}
               3. After the hold period, your video becomes available for viewers{'\n'}
               4. Users earn coins by watching your video{'\n'}

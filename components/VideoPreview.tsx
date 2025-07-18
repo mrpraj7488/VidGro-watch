@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { validateVideoForPromotion, getThumbnailUrl, extractVideoId } from '../utils/youtube';
+import { validateVideoForPromotion, getThumbnailUrl, extractVideoId, generateDefaultTitle } from '../utils/youtube';
 import { CircleAlert as AlertCircle, CircleCheck as CheckCircle, Play } from 'lucide-react-native';
 
 interface VideoPreviewProps {
@@ -53,7 +53,7 @@ export default function VideoPreview({ youtubeUrl, onValidation, collapsed = fal
         onValidation(false);
       }
     } catch (err) {
-      setError('Failed to validate video. Please try again.');
+      setError('Invalid video URL format');
       onValidation(false);
     } finally {
       setLoading(false);
@@ -69,7 +69,7 @@ export default function VideoPreview({ youtubeUrl, onValidation, collapsed = fal
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#800080" />
-          <Text style={styles.loadingText}>Validating video...</Text>
+          <Text style={styles.loadingText}>Checking video...</Text>
         </View>
       </View>
     );
@@ -106,7 +106,7 @@ export default function VideoPreview({ youtubeUrl, onValidation, collapsed = fal
             </Text>
             <View style={styles.validationBadge}>
               <CheckCircle size={16} color="#2ECC71" />
-              <Text style={styles.validationText}>Video is embeddable</Text>
+              <Text style={styles.validationText}>Video is valid</Text>
             </View>
           </View>
         </View>
@@ -120,7 +120,7 @@ export default function VideoPreview({ youtubeUrl, onValidation, collapsed = fal
         <Text style={styles.previewTitle}>Video Preview</Text>
         <View style={styles.validationBadge}>
           <CheckCircle size={16} color="#2ECC71" />
-          <Text style={styles.validationText}>Embeddable</Text>
+          <Text style={styles.validationText}>Valid</Text>
         </View>
       </View>
 
@@ -133,7 +133,7 @@ export default function VideoPreview({ youtubeUrl, onValidation, collapsed = fal
           javaScriptEnabled
           domStorageEnabled
           onError={() => {
-            setError('Video failed to load. It may be restricted or private.');
+            setError('Video failed to load.');
             onValidation(false);
           }}
           onLoadStart={() => setLoading(true)}

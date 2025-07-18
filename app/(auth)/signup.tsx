@@ -34,14 +34,13 @@ export default function SignupScreen() {
 
     setLoading(true);
     const { error } = await signUp(email, password, username);
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       Alert.alert('Signup Error', error.message);
     } else {
-      Alert.alert('Success', 'Account created successfully!', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)') }
-      ]);
+      // Navigation will be handled by AuthContext
+      setLoading(false);
     }
   };
 
