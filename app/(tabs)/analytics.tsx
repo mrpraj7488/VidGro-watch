@@ -138,15 +138,8 @@ export default function AnalyticsTab() {
         setLoading(true);
       }
 
-      // Fetch user analytics summary
-      const { data: analyticsData, error: analyticsError } = await supabase
-        .rpc('get_user_analytics_summary', { user_uuid: user.id });
-
-      if (analyticsError) {
-        console.error('Error fetching analytics:', analyticsError);
-      }
-
-      const summaryData = analyticsData?.[0] || {
+      // Fetch analytics data with fallback approach
+      let summaryData = {
         total_videos_promoted: 0,
         total_coins_earned: 0,
         total_coins_spent: 0,
@@ -156,6 +149,69 @@ export default function AnalyticsTab() {
         completed_videos: 0,
         on_hold_videos: 0,
       };
+
+      try {
+        const { data: analyticsData, error: analyticsError } = await supabase
+          .rpc('get_user_analytics_summary', { user_uuid: user.id });
+
+        if (analyticsError) {
+          console.error('Analytics RPC error:', analyticsError);
+          // Fall back to manual calculation
+          await calculateAnalyticsManually();
+        } else if (analyticsData && analyticsData.length > 0) {
+          summaryData = analyticsData[0];
+        } else {
+          // Fall back to manual calculation
+          await calculateAnalyticsManually();
+        }
+      } catch (rpcError) {
+        console.error('RPC function failed, falling back to manual calculation:', rpcError);
+        await calculateAnalyticsManually();
+      }
+
+      async function calculateAnalyticsManually() {
+        try {
+          // Get video count
+          const { count: videoCount } = await supabase
+            .from('videos')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+
+          // Get coins earned (positive transactions)
+          const { data: earnedData } = await supabase
+            .from('coin_transactions')
+            .select('amount')
+            .eq('user_id', user.id)
+            .gt('amount', 0);
+
+          // Get coins spent (negative transactions)
+          const { data: spentData } = await supabase
+            .from('coin_transactions')
+            .select('amount')
+            .eq('user_id', user.id)
+            .lt('amount', 0);
+
+          // Get video stats
+          const { data: videoStats } = await supabase
+            .from('videos')
+            .select('views_count, total_watch_time, status')
+            .eq('user_id', user.id);
+
+          summaryData = {
+            total_videos_promoted: videoCount || 0,
+            total_coins_earned: earnedData?.reduce((sum, t) => sum + t.amount, 0) || 0,
+            total_coins_spent: Math.abs(spentData?.reduce((sum, t) => sum + t.amount, 0) || 0),
+            total_views_received: videoStats?.reduce((sum, v) => sum + (v.views_count || 0), 0) || 0,
+            total_watch_time: videoStats?.reduce((sum, v) => sum + (v.total_watch_time || 0), 0) || 0,
+            active_videos: videoStats?.filter(v => v.status === 'active').length || 0,
+            completed_videos: videoStats?.filter(v => v.status === 'completed').length || 0,
+            on_hold_videos: videoStats?.filter(v => v.status === 'on_hold').length || 0,
+          };
+        } catch (manualError) {
+          console.error('Manual calculation also failed:', manualError);
+          // Keep default values
+        }
+      }
 
       // Fetch promoted videos with detailed information
       const { data: promotedVideos, error: videosError } = await supabase
@@ -192,16 +248,23 @@ export default function AnalyticsTab() {
         await refreshProfile();
       }
 
-      // Fetch recent activity
-      const { data: activityData, error: activityError } = await supabase
-        .from('coin_transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
+      // Fetch recent activity with error handling
+      let activityData = [];
+      try {
+        const { data, error: activityError } = await supabase
+          .from('coin_transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
 
-      if (activityError) {
-        console.error('Error fetching activity:', activityError);
+        if (activityError) {
+          console.error('Error fetching activity:', activityError);
+        } else {
+          activityData = data || [];
+        }
+      } catch (activityFetchError) {
+        console.error('Activity fetch failed:', activityFetchError);
       }
 
       setAnalytics({
@@ -213,7 +276,7 @@ export default function AnalyticsTab() {
         activeVideos: summaryData.active_videos,
         completedVideos: summaryData.completed_videos,
         onHoldVideos: summaryData.on_hold_videos,
-        recentActivities: activityData || [],
+        recentActivities: activityData,
         promotedVideos: videosWithAnalytics,
       });
 
@@ -237,7 +300,25 @@ export default function AnalyticsTab() {
 
     } catch (error) {
       console.error('Error fetching analytics:', error);
-      Alert.alert('Error', 'Failed to load analytics data');
+      
+      // Set default analytics data instead of showing error
+      setAnalytics({
+        totalVideosPromoted: 0,
+        totalCoinsEarned: 0,
+        totalCoinsSpent: 0,
+        totalViewsReceived: 0,
+        totalWatchTime: 0,
+        activeVideos: 0,
+        completedVideos: 0,
+        onHoldVideos: 0,
+        recentActivities: [],
+        promotedVideos: [],
+      });
+      
+      // Only show alert in development
+      if (__DEV__) {
+        Alert.alert('Debug: Analytics Error', error.message || 'Failed to load analytics data');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
