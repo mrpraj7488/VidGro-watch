@@ -147,6 +147,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     console.log('AuthContext: signOut called');
+    
+    // Clear local state first to ensure immediate UI update
+    setProfile(null);
+    setUser(null);
+    
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
@@ -157,11 +162,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('AuthContext: signOut exception:', error);
     }
-    
-    // Always clear local state regardless of Supabase response
-    console.log('AuthContext: Clearing local state');
-    setProfile(null);
-    setUser(null);
   };
 
   const refreshProfile = async () => {

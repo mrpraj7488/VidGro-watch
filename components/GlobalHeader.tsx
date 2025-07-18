@@ -50,12 +50,12 @@ export default function GlobalHeader({
       console.log('GlobalHeader: Calling signOut function');
       await signOut();
       console.log('GlobalHeader: SignOut completed, navigating to login');
-      router.replace('/(auth)/login');
     } catch (error) {
       console.error('GlobalHeader: Logout error:', error);
-      // Force navigation even if signOut fails
-      router.replace('/(auth)/login');
     }
+    
+    // Always navigate to login after signOut attempt
+    router.replace('/(auth)/login');
   };
 
   const renderSideMenu = () => (
