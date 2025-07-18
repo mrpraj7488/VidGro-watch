@@ -18,7 +18,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVideoStore } from '@/store/videoStore';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Eye, Clock, Trash2, Play, Timer, ChevronDown, Check } from 'lucide-react-native';
+import { ArrowLeft, Eye, Clock, Trash2, Play, Timer, ChevronDown, Check, MoreVertical } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -141,7 +141,7 @@ const SmoothDropdown: React.FC<DropdownProps> = ({
 };
 
 export default function EditVideoScreen() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { clearQueue } = useVideoStore();
   const params = useLocalSearchParams();
   const [videoData, setVideoData] = useState<VideoData | null>(null);
@@ -424,7 +424,13 @@ export default function EditVideoScreen() {
       const coinCost = calculateCoinCost(selectedViews, selectedDuration);
       
       // Check if user has enough coins
-      if ((profile?.coins || 0) < coinCost) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('coins')
+        .eq('id', user.id)
+        .single();
+      
+      if ((profileData?.coins || 0) < coinCost) {
         Alert.alert('Insufficient Coins', `You need 🪙${coinCost} coins to repromote this video.`);
         setRepromoting(false);
         return;
@@ -522,9 +528,6 @@ export default function EditVideoScreen() {
     }
   };
 
-  const coinAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: coinBounce.value }],
-  }));
 
   if (loading || !videoData) {
     return (
@@ -537,16 +540,14 @@ export default function EditVideoScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <LinearGradient colors={['#800080', '#800080']} style={styles.header}>
+      <LinearGradient colors={['#800080', '#FF4757']} style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleNavigateBack}>
           <ArrowLeft color="white" size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {videoData.title}
-        </Text>
-        <Animated.View style={[styles.coinDisplay, coinAnimatedStyle]}>
-          <Text style={styles.coinCount}>🪙{profile?.coins || 0}</Text>
-        </Animated.View>
+        <Text style={styles.headerTitle}>Edit Video</Text>
+        <TouchableOpacity style={styles.menuButton}>
+          <MoreVertical color="white" size={24} />
+        </TouchableOpacity>
       </LinearGradient>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -556,7 +557,7 @@ export default function EditVideoScreen() {
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(videoData.status) }]}>
               <Text style={styles.statusText}>{getStatusText(videoData.status)}</Text>
             </View>
-            <Text style={styles.videoId}>ID: {videoData.youtube_url}</Text>
+            <Text style={styles.videoId} numberOfLines={1}>ID: {videoData.title}</Text>
           </View>
         </View>
 
@@ -779,26 +780,13 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
+  menuButton: {
+    padding: 8,
+  },
   headerTitle: {
-    flex: 1,
     fontSize: isSmallScreen ? 16 : 18,
     fontWeight: '600',
     color: 'white',
-    textAlign: 'center',
-    marginHorizontal: 16,
-  },
-  coinDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(244, 143, 177, 0.2)',
-    paddingHorizontal: isSmallScreen ? 10 : 12,
-    paddingVertical: isSmallScreen ? 6 : 8,
-    borderRadius: 20,
-  },
-  coinCount: {
-    color: 'white',
-    fontSize: isSmallScreen ? 14 : 16,
-    fontWeight: 'bold',
   },
   scrollView: {
     flex: 1,
@@ -841,7 +829,9 @@ const styles = StyleSheet.create({
   videoId: {
     fontSize: 12,
     color: '#666',
-    fontFamily: 'monospace',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 8,
   },
   pendingCard: {
     backgroundColor: '#FFF8E1',
