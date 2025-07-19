@@ -13,6 +13,7 @@ interface VideoState {
   videoQueue: Video[];
   currentVideoIndex: number;
   isLoading: boolean;
+  error: string | null;
   blacklistedVideoIds: string[];
   fetchVideos: (userId: string) => Promise<void>;
   getCurrentVideo: () => Video | null;
@@ -20,34 +21,50 @@ interface VideoState {
   handleVideoError: (videoId: string) => void;
   resetQueue: () => void;
   clearQueue: () => void;
+  setError: (error: string | null) => void;
 }
 
 export const useVideoStore = create<VideoState>((set, get) => ({
   videoQueue: [],
   currentVideoIndex: 0,
   isLoading: false,
+  error: null,
   blacklistedVideoIds: [],
 
   fetchVideos: async (userId: string) => {
+    console.log('VideoStore: Starting fetchVideos for user:', userId);
     set({ isLoading: true });
     try {
       const videos = await getNextVideoForUser(userId);
+      console.log('VideoStore: Received videos:', videos);
+      
       if (videos && videos.length > 0) {
         const { blacklistedVideoIds } = get();
         const filteredVideos = videos.filter(
           (video: Video) => !blacklistedVideoIds.includes(video.video_id)
         );
+        console.log('VideoStore: Filtered videos:', filteredVideos.length);
         set({ 
           videoQueue: filteredVideos, 
           currentVideoIndex: 0,
-          isLoading: false 
+          isLoading: false,
+          error: null
         });
       } else {
-        set({ videoQueue: [], currentVideoIndex: 0, isLoading: false });
+        console.log('VideoStore: No videos received');
+        set({ 
+          videoQueue: [], 
+          currentVideoIndex: 0, 
+          isLoading: false,
+          error: 'No videos available at the moment'
+        });
       }
     } catch (error) {
       console.error('Error fetching videos:', error);
-      set({ isLoading: false });
+      set({ 
+        isLoading: false,
+        error: 'Failed to load videos. Please try again.'
+      });
     }
   },
 
@@ -67,6 +84,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   },
 
   handleVideoError: (videoId: string) => {
+    console.log('VideoStore: Handling video error for:', videoId);
     const { blacklistedVideoIds } = get();
     set({ 
       blacklistedVideoIds: [...blacklistedVideoIds, videoId] 
@@ -79,7 +97,8 @@ export const useVideoStore = create<VideoState>((set, get) => ({
       videoQueue: [], 
       currentVideoIndex: 0, 
       isLoading: false,
-      blacklistedVideoIds: []
+      blacklistedVideoIds: [],
+      error: null
     });
   },
 
@@ -89,7 +108,12 @@ export const useVideoStore = create<VideoState>((set, get) => ({
       videoQueue: [], 
       currentVideoIndex: 0, 
       isLoading: false,
-      blacklistedVideoIds: []
+      blacklistedVideoIds: [],
+      error: null
     });
+  },
+
+  setError: (error: string | null) => {
+    set({ error });
   },
 }));

@@ -20,15 +20,67 @@ export default function ViewTab() {
   const [videoStartTime, setVideoStartTime] = useState(0);
   const [canEarnCoins, setCanEarnCoins] = useState(false);
   const [adCounter, setAdCounter] = useState(0);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const webViewRef = useRef<WebView>(null);
 
   const currentVideo = getCurrentVideo();
 
+  // Debug logging
   useEffect(() => {
-    if (user && !isLoading && videoQueue.length === 0) {
-      fetchVideos(user.id);
+    console.log('ViewTab State:', {
+      user: user?.id,
+      profile: profile?.username,
+      isLoading,
+      videoQueueLength: videoQueue.length,
+      currentVideoIndex,
+      currentVideo: currentVideo?.title,
+      fetchAttempted,
+      error
+    });
+  }, [user, profile, isLoading, videoQueue.length, currentVideoIndex, currentVideo, fetchAttempted, error]);
+
+  // Initial video fetch with better error handling
+  useEffect(() => {
+    const initializeVideos = async () => {
+      if (!user) {
+        console.log('No user found, skipping video fetch');
+        return;
+      }
+
+      if (fetchAttempted) {
+        console.log('Fetch already attempted, skipping');
+        return;
+      }
+
+      if (videoQueue.length > 0) {
+        console.log('Videos already loaded, skipping fetch');
+        return;
+      }
+
+      console.log('Starting video fetch for user:', user.id);
+      setFetchAttempted(true);
+      setError(null);
+
+      try {
+        await fetchVideos(user.id);
+        console.log('Video fetch completed');
+      } catch (error) {
+        console.error('Error fetching videos:', error);
+        setError('Failed to load videos. Please try again.');
+      }
+    };
+
+    initializeVideos();
+  }, [user, fetchVideos, videoQueue.length, fetchAttempted]);
+
+  // Reset fetch attempt when user changes
+  useEffect(() => {
+    if (user) {
+      setFetchAttempted(false);
+      setError(null);
     }
-  }, [user, isLoading, videoQueue.length, fetchVideos]);
+  }, [user?.id]);
 
   useEffect(() => {
     updateTimer();
@@ -127,6 +179,20 @@ export default function ViewTab() {
     );
   };
 
+  const handleRetryFetch = async () => {
+    if (!user) return;
+    
+    setFetchAttempted(false);
+    setError(null);
+    
+    try {
+      await fetchVideos(user.id);
+    } catch (error) {
+      console.error('Retry fetch error:', error);
+      setError('Failed to load videos. Please check your connection.');
+    }
+  };
+
   const openInYouTube = () => {
     if (currentVideo) {
       Alert.alert(
@@ -142,7 +208,8 @@ export default function ViewTab() {
     }
   };
 
-  if (isLoading) {
+  // Loading state with timeout
+  if (isLoading && !error) {
     return (
       <View style={styles.container}>
         <GlobalHeader 
@@ -153,12 +220,37 @@ export default function ViewTab() {
         />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading videos...</Text>
+          <Text style={styles.loadingSubtext}>Please wait while we fetch videos for you</Text>
         </View>
       </View>
     );
   }
 
-  if (!currentVideo) {
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <GlobalHeader 
+          title="View" 
+          showCoinDisplay={true}
+          menuVisible={menuVisible} 
+          setMenuVisible={setMenuVisible} 
+        />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={handleRetryFetch}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // No videos available
+  if (!isLoading && (!currentVideo || videoQueue.length === 0)) {
     return (
       <View style={styles.container}>
         <GlobalHeader 
@@ -169,9 +261,12 @@ export default function ViewTab() {
         />
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No videos available</Text>
+          <Text style={styles.emptySubtext}>
+            There are currently no videos in the queue. Check back later or promote your own videos!
+          </Text>
           <TouchableOpacity 
             style={styles.refreshButton}
-            onPress={() => user && fetchVideos(user.id)}
+            onPress={handleRetryFetch}
           >
             <Text style={styles.refreshButtonText}>Refresh</Text>
           </TouchableOpacity>
@@ -203,7 +298,16 @@ export default function ViewTab() {
           mediaPlaybackRequiresUserAction={false}
           javaScriptEnabled
           domStorageEnabled
-          onError={() => handleVideoError(currentVideo.video_id)}
+          onError={(error) => {
+            console.error('WebView error:', error);
+            handleVideoError(currentVideo.video_id);
+          }}
+          onLoadStart={() => console.log('WebView load started')}
+          onLoadEnd={() => console.log('WebView load ended')}
+          onHttpError={(error) => {
+            console.error('WebView HTTP error:', error);
+            handleVideoError(currentVideo.video_id);
+          }}
         />
       </View>
 
@@ -260,10 +364,40 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   loadingText: {
     fontSize: 18,
     color: '#666',
+    marginBottom: 8,
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#E74C3C',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#800080',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,
@@ -275,7 +409,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
     marginBottom: 20,
+    lineHeight: 20,
   },
   refreshButton: {
     backgroundColor: '#800080',

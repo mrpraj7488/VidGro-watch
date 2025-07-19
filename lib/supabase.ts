@@ -84,15 +84,23 @@ export async function updateUserCoins(
 
 // Helper function to get next video for user
 export async function getNextVideoForUser(userId: string) {
+  console.log('Supabase: Getting next video for user:', userId);
+  
+  if (!userId) {
+    console.error('Supabase: No user ID provided');
+    return null;
+  }
+
   const { data, error } = await supabase.rpc('get_next_video_for_user_enhanced', {
     user_uuid: userId
   });
 
   if (error) {
     console.error('Error fetching next video:', error);
-    return null;
+    throw new Error(`Failed to fetch videos: ${error.message}`);
   }
 
+  console.log('Supabase: Video fetch result:', { data, count: data?.length });
   return data;
 }
 
